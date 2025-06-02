@@ -1,0 +1,45 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+default-run = "app"
+edition = "2021"
+rust-version = "1.60"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.5.5", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+schemars = "0.8"
+tauri = { version = "1.8.1", features = [ "os-all", "app-hide", "app-show", "process-exit", "dialog-save",
+    "fs-create-dir",
+    "path-all",
+    "fs-write-file",
+    "clipboard-all",
+] }
+rand = "0.8"
+zxcvbn = "2.2"
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+chrono = { version = "0.4", features = ["serde"] }
+urlencoding = "2.1"
+
+[dev-dependencies]
+rand_chacha = "0.3"
+wiremock = "0.6"
+futures = "0.3"
+tokio-test = "0.4"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.
+# If you use cargo directly instead of tauri's cli you can use this feature flag to switch between tauri's `dev` and `build` modes.
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

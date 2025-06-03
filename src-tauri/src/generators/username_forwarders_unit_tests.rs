@@ -145,6 +145,7 @@ mod addyio_unit_tests {
     #[tokio::test]
     async fn test_various_http_errors() {
         let test_cases = vec![
+            (401, "Unauthorized - Invalid API key"),
             (403, "Forbidden - Invalid domain"),
             (404, "Not Found - Invalid endpoint"),
             (429, "Too Many Requests"),
@@ -836,7 +837,7 @@ mod simplelogin_unit_tests {
             .register(
                 Mock::given(method("POST"))
                     .and(path("/api/alias/random/new"))
-                    .and(query_param("hostname", "test site.com/path?param=value"))
+                    .and(query_param("hostname", "test%20site.com/path%3Fparam%3Dvalue"))
                     .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                         "alias": "encoded@simplelogin.co"
                     }))),

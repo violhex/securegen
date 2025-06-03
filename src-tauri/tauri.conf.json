@@ -23,7 +23,10 @@
         "exit": true
       },
       "os": {
-        "all": true
+        "all": false,
+        "platform": true,
+        "arch": true,
+        "type": true
       },
       "clipboard": {
         "all": true,

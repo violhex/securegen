@@ -29,12 +29,22 @@ pub async fn generate(
         .send()
         .await?;
 
-    if response.status() == StatusCode::UNAUTHORIZED {
-        return Err(UsernameError::InvalidApiKey);
+    // Handle specific HTTP status codes with meaningful error messages
+    match response.status() {
+        StatusCode::UNAUTHORIZED => {
+            return Err(UsernameError::InvalidApiKey);
+        }
+        StatusCode::FORBIDDEN => {
+            return Err(UsernameError::DomainRejected);
+        }
+        StatusCode::TOO_MANY_REQUESTS => {
+            return Err(UsernameError::RateLimitExceeded);
+        }
+        _ => {}
     }
 
-    // Throw any other errors
-    response.error_for_status_ref()?;
+    // Consume the response and check for other HTTP errors
+    let response = response.error_for_status()?;
 
     #[derive(serde::Deserialize)]
     struct ResponseData {
@@ -151,7 +161,10 @@ mod tests {
         .await
         .unwrap_err();
 
-        assert!(fake_domain_error.to_string().contains("403 Forbidden"));
+        assert_eq!(
+            fake_domain_error.to_string(),
+            UsernameError::DomainRejected.to_string()
+        );
 
         server.verify().await;
         assert_eq!(address, "50c9e585-e7f5-41c4-9016-9014c15454bc@myemail.com");

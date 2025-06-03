@@ -20,32 +20,53 @@ export const passphraseConfigSchema = z.object({
   includeNumbers: z.boolean(),
 });
 
-export const usernameConfigSchema = z.object({
-  type: z.enum(['Word', 'Subaddress', 'Catchall', 'Forwarded']),
-  
-  // Word variant options
+// Word-based username schema
+const wordUsernameSchema = z.object({
+  type: z.literal('Word'),
   capitalize: z.boolean().optional(),
   include_number: z.boolean().optional(),
-  
-  // Subaddress variant options
-  email: z.string().optional(),
+});
+
+// Email subaddress username schema
+const subaddressUsernameSchema = z.object({
+  type: z.literal('Subaddress'),
+  email: z.string().email('Invalid email format').optional(),
   append_type: z.enum(['Random', 'WebsiteName']).optional(),
   website: z.string().optional(),
-  
-  // Catchall variant options
+});
+
+// Catchall email username schema
+const catchallUsernameSchema = z.object({
+  type: z.literal('Catchall'),
+  domain: z.string().min(1, 'Domain is required for catchall type').optional(),
+  append_type: z.enum(['Random', 'WebsiteName']).optional(),
+  website: z.string().optional(),
+});
+
+// Forwarded email service schema
+const forwardedServiceSchema = z.object({
+  type: z.enum(['AddyIo', 'DuckDuckGo', 'Firefox', 'Fastmail', 'ForwardEmail', 'SimpleLogin']),
+  api_token: z.string().optional(),
   domain: z.string().optional(),
-  
-  // Forwarded variant options
-  service: z.object({
-    type: z.enum(['AddyIo', 'DuckDuckGo', 'Firefox', 'Fastmail', 'ForwardEmail', 'SimpleLogin']),
-    api_token: z.string().optional(),
-    domain: z.string().optional(),
-    base_url: z.string().optional(),
-    token: z.string().optional(),
-    api_key: z.string().optional(),
-  }).optional(),
+  base_url: z.string().url('Invalid URL format').optional(),
+  token: z.string().optional(),
+  api_key: z.string().optional(),
+});
+
+// Forwarded email username schema
+const forwardedUsernameSchema = z.object({
+  type: z.literal('Forwarded'),
+  service: forwardedServiceSchema.optional(),
   forwarded_website: z.string().optional(),
 });
+
+// Discriminated union of all username config variants
+export const usernameConfigSchema = z.discriminatedUnion('type', [
+  wordUsernameSchema,
+  subaddressUsernameSchema,
+  catchallUsernameSchema,
+  forwardedUsernameSchema,
+]);
 
 export type PasswordConfig = z.infer<typeof passwordConfigSchema>;
 export type PassphraseConfig = z.infer<typeof passphraseConfigSchema>;

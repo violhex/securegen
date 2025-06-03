@@ -20,6 +20,7 @@ import {
 import { format } from 'date-fns';
 import { useAppStore } from '@/lib/store';
 import { useGenerator } from '@/hooks/useGenerator';
+import { useWindowWidth } from '@/hooks/useWindowWidth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -68,6 +69,7 @@ export function History() {
 
   const { history, removeFromHistory, clearHistory } = useAppStore();
   const { copyToClipboard } = useGenerator();
+  const windowWidth = useWindowWidth();
 
   const filteredHistory = useMemo(() => {
     const filtered = history.filter((item) => {
@@ -241,7 +243,7 @@ export function History() {
               <Card key={type} className="card-flat">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <div className={cn("p-1.5 sm:p-2 rounded-lg", `${config.iconColor.replace('text-', 'text-')} bg-current/10`)}>
+                    <div className={cn("p-1.5 sm:p-2 rounded-lg", `${config.iconColor.replace('text-', 'bg-')}/10`)}>
                       <Icon className={cn("w-3 h-3 sm:w-4 sm:h-4", config.iconColor)} />
                     </div>
                     <div className="min-w-0">
@@ -325,7 +327,7 @@ export function History() {
                     <CardContent className="p-4 sm:p-6">
                       <div className="flex items-start gap-3 sm:gap-4">
                         {/* Type Icon */}
-                        <div className={cn("p-2 sm:p-3 rounded-xl flex-shrink-0 bg-current/10", config.iconColor)}>
+                        <div className={cn("p-2 sm:p-3 rounded-xl flex-shrink-0", `${config.iconColor.replace('text-', 'bg-')}/10`)}>
                           <Icon className={cn("w-4 h-4 sm:w-5 sm:h-5", config.iconColor)} />
                         </div>
 
@@ -349,7 +351,7 @@ export function History() {
                                 )}
                               </div>
                               <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
-                                {format(new Date(item.createdAt), window.innerWidth < 640 ? 'MMM d, h:mm a' : 'PPp')}
+                                {format(new Date(item.createdAt), windowWidth < 640 ? 'MMM d, h:mm a' : 'PPp')}
                               </p>
                             </div>
 
@@ -396,8 +398,8 @@ export function History() {
                                 <span className="select-all">{item.value}</span>
                               ) : (
                                 <span className="select-none">
-                                  {'•'.repeat(Math.min(item.value.length, window.innerWidth < 640 ? 15 : 20))}
-                                  {item.value.length > (window.innerWidth < 640 ? 15 : 20) && '...'}
+                                  {'•'.repeat(Math.min(item.value.length, windowWidth < 640 ? 15 : 20))}
+                                  {item.value.length > (windowWidth < 640 ? 15 : 20) && '...'}
                                 </span>
                               )}
                             </div>

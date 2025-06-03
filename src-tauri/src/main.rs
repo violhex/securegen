@@ -13,6 +13,7 @@ use tauri::ClipboardManager;
 use zxcvbn::zxcvbn;
 use std::fs;
 use tauri::api::path;
+use chrono::Utc;
 
 // Legacy struct for backward compatibility
 #[derive(Debug, Serialize, Deserialize)]
@@ -131,7 +132,7 @@ async fn save_password_to_file(password: String) -> Result<String, String> {
     }
     
     // Generate timestamp filename
-    let now = chrono::Utc::now();
+    let now = Utc::now();
     let timestamp = now.format("%Y-%m-%d-%H-%M");
     let filename = format!("{}-pw.txt", timestamp);
     let file_path = secgen_dir.join(&filename);

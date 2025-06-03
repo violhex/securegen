@@ -95,6 +95,29 @@ export function useGenerator() {
       }
       
       const username = await TauriAPI.generateUsername(usernameConfig);
+      
+      // Validate the generated username to ensure it's not an error sentinel or invalid
+      if (!username || 
+          username.trim() === '' || 
+          username === 'username_generation_failed' ||
+          username.includes('error') ||
+          username.includes('failed')) {
+        throw new Error('Username generation returned an invalid result. Please try again.');
+      }
+      
+      // Additional validation based on username type
+      if (usernameConfig.type === 'Word') {
+        // Word-based usernames should not contain @ symbol
+        if (username.includes('@')) {
+          throw new Error('Invalid word-based username format received. Please try again.');
+        }
+      } else if (['Subaddress', 'Catchall', 'Forwarded'].includes(usernameConfig.type)) {
+        // Email-based usernames should contain @ symbol and have valid email format
+        if (!username.includes('@') || username.split('@').length !== 2) {
+          throw new Error('Invalid email-based username format received. Please try again.');
+        }
+      }
+      
       setCurrentUsername(username);
       
       addToHistory({

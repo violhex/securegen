@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, RefreshCw, Save, Eye, EyeOff, CheckCircle, AlertCircle, Hash } from 'lucide-react';
 import { toast } from 'sonner';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,15 @@ import { passphraseConfigSchema } from '@/lib/validations';
 import { TauriAPI } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import type { PassphraseConfig } from '@/types';
+
+// Strength scoring constants
+const MAX_STRENGTH = 100;
+const STRENGTH_THRESHOLDS = {
+  WEAK: MAX_STRENGTH * 0.25,    // 25 - corresponds to raw score 0-1
+  FAIR: MAX_STRENGTH * 0.5,     // 50 - corresponds to raw score 1-2
+  GOOD: MAX_STRENGTH * 0.75,    // 75 - corresponds to raw score 2-3
+  STRONG: MAX_STRENGTH          // 100 - corresponds to raw score 3-4
+} as const;
 
 export function PassphraseGenerator() {
   const [showPassphrase, setShowPassphrase] = useState(true);
@@ -71,7 +80,8 @@ export function PassphraseGenerator() {
     if (currentPassphrase) {
       TauriAPI.calculatePasswordStrength(currentPassphrase)
         .then((result) => {
-          setStrength(result.score);
+          // Convert 0-4 scale to 0-100 percentage scale
+          setStrength(result.score * (MAX_STRENGTH / 4));
           setStrengthDetails({
             crack_times_display: result.crack_times_display,
             feedback: result.feedback,
@@ -145,9 +155,10 @@ export function PassphraseGenerator() {
   };
 
   const getStrengthLabel = (score: number) => {
-    if (score < 30) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
-    if (score < 60) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
-    if (score < 80) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
+    // Score is now 0-100 (converted from 0-4 scale)
+    if (score < STRENGTH_THRESHOLDS.WEAK) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
+    if (score < STRENGTH_THRESHOLDS.FAIR) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
+    if (score < STRENGTH_THRESHOLDS.GOOD) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
     return { label: 'Strong', color: 'strength-strong', icon: CheckCircle };
   };
 
@@ -201,15 +212,21 @@ export function PassphraseGenerator() {
                   </Badge>
                 </div>
                 <div className="space-y-2">
-                  <Slider
-                    id="wordCount"
-                    min={3}
-                    max={20}
-                    step={1}
-                    value={[form.watch('wordCount')]}
-                    onValueChange={(value) => form.setValue('wordCount', value[0])}
-                    className="w-full"
-                    aria-describedby="wordCount-help"
+                  <Controller
+                    name="wordCount"
+                    control={form.control}
+                    render={({ field }) => (
+                      <Slider
+                        id="wordCount"
+                        min={3}
+                        max={20}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(value) => field.onChange(value[0])}
+                        className="w-full"
+                        aria-describedby="wordCount-help"
+                      />
+                    )}
                   />
                   <p id="wordCount-help" className="text-xs text-muted-foreground">
                     Recommended: 4-6 words for most uses, 7+ for maximum security, up to 20 words supported
@@ -224,8 +241,7 @@ export function PassphraseGenerator() {
                 </Label>
                 <Input
                   id="separator"
-                  value={form.watch('separator')}
-                  onChange={(e) => form.setValue('separator', e.target.value)}
+                  {...form.register('separator')}
                   placeholder="Enter separator"
                   maxLength={5}
                   className="font-mono"
@@ -242,13 +258,17 @@ export function PassphraseGenerator() {
                 <div className="grid grid-cols-1 gap-4">
                   <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
                     <div className="flex items-center space-x-3">
-                      <Switch
-                        id="capitalize"
-                        checked={form.watch('capitalize')}
-                        onCheckedChange={(checked) => 
-                          form.setValue('capitalize', checked)
-                        }
-                        aria-describedby="capitalize-help"
+                      <Controller
+                        name="capitalize"
+                        control={form.control}
+                        render={({ field }) => (
+                          <Switch
+                            id="capitalize"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            aria-describedby="capitalize-help"
+                          />
+                        )}
                       />
                       <div>
                         <Label htmlFor="capitalize" className="text-sm font-medium">
@@ -263,13 +283,17 @@ export function PassphraseGenerator() {
                   
                   <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
                     <div className="flex items-center space-x-3">
-                      <Switch
-                        id="includeNumbers"
-                        checked={form.watch('includeNumbers')}
-                        onCheckedChange={(checked) => 
-                          form.setValue('includeNumbers', checked)
-                        }
-                        aria-describedby="includeNumbers-help"
+                      <Controller
+                        name="includeNumbers"
+                        control={form.control}
+                        render={({ field }) => (
+                          <Switch
+                            id="includeNumbers"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            aria-describedby="includeNumbers-help"
+                          />
+                        )}
                       />
                       <div>
                         <Label htmlFor="includeNumbers" className="text-sm font-medium">

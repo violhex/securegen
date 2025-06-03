@@ -46,7 +46,8 @@ async fn generate_internal(
             labels: website,
         })
         .send()
-        .await?;
+        .await
+        .map_err(UsernameError::Http)?;
 
     if response.status() == StatusCode::UNAUTHORIZED {
         return Err(UsernameError::InvalidApiKey);
@@ -65,7 +66,7 @@ async fn generate_internal(
         error: Option<String>,
     }
     let status = response.status();
-    let response: Response = response.json().await?;
+    let response: Response = response.json().await.map_err(UsernameError::Http)?;
 
     if status.is_success() {
         if let Some(name) = response.name {

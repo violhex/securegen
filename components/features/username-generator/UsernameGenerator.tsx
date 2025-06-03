@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import type { UsernameConfig } from '@/types';
 
 export function UsernameGenerator() {
-  const [showUsername, setShowUsername] = useState(true);
+  const [showUsername, setShowUsername] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string>('');

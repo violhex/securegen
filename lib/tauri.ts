@@ -12,7 +12,7 @@ interface TauriPasswordGeneratorRequest {
   numbers: boolean;
   special: boolean;
   length: number;
-  avoidAmbiguous: boolean;
+  avoid_ambiguous: boolean;
   minLowercase?: number;
   minUppercase?: number;
   minNumber?: number;
@@ -75,7 +75,7 @@ export class TauriAPI {
         numbers: config.numbers,
         special: config.special,
         length: config.length,
-        avoidAmbiguous: config.avoid_ambiguous,
+        avoid_ambiguous: config.avoid_ambiguous,
         minLowercase: config.min_lowercase,
         minUppercase: config.min_uppercase,
         minNumber: config.min_number,
@@ -234,7 +234,7 @@ export class TauriAPI {
       return await invoke('generate_username', { request: tauriRequest });
     } catch (error) {
       console.error('Failed to generate username:', error);
-      return 'username_generation_failed';
+      throw error;
     }
   }
 
@@ -363,13 +363,18 @@ export class TauriAPI {
     if (password.length < 8) score -= 20;
     if (password.length < 6) score -= 30;
     
-    return Math.max(0, Math.min(100, score));
+    // Normalize to 0-100 scale first, then map to 0-4 scale
+    const normalizedScore = Math.max(0, Math.min(100, score));
+    
+    // Map 0-100 to 0-4 scale to match backend/zxcvbn
+    return Math.floor(normalizedScore / 25);
   }
 
   private static getStrengthDescription(score: number): string {
-    if (score < 30) return 'Very weak - could be cracked instantly';
-    if (score < 60) return 'Weak - could be cracked in minutes';
-    if (score < 80) return 'Good - could take days to crack';
+    // Score is now on 0-4 scale to match backend/zxcvbn
+    if (score < 1) return 'Very weak - could be cracked instantly';
+    if (score < 2) return 'Weak - could be cracked in minutes';
+    if (score < 3) return 'Good - could take days to crack';
     return 'Strong - would take years to crack';
   }
 

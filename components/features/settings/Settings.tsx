@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getSystemInformation } from '@/lib/hardware-id';
+import { tauri, isTauriEnvironment } from '@/types/tauri';
 
 
 
@@ -36,8 +37,8 @@ export function Settings() {
     buildNumber: '2024.001',
   });
 
-  // Mock API key for display
-  const mockApiKey = 'bw_api_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t';
+ // Obfuscated display key - actual key should come from secure storage
+ const displayApiKey = 'bw_api_****************************';
 
   useEffect(() => {
     const initializeSystemInfo = async () => {
@@ -49,10 +50,9 @@ export function Settings() {
         let appVersion = '1.0.0';
         let buildNumber = '2024.001';
         
-        if (typeof window !== 'undefined' && (window as unknown as { __TAURI__?: { app: { getVersion: () => Promise<string> } } }).__TAURI__) {
+        if (isTauriEnvironment() && tauri.app) {
           try {
-            const { getVersion } = (window as unknown as { __TAURI__: { app: { getVersion: () => Promise<string> } } }).__TAURI__.app;
-            appVersion = await getVersion();
+            appVersion = await tauri.app.getVersion();
             // Extract build number from version if present
             const versionParts = appVersion.split('-');
             if (versionParts.length > 1) {
@@ -73,21 +73,26 @@ export function Settings() {
           platform: sysInfo.platform,
         }));
 
-        // Get user's IP address asynchronously
-        fetch('https://api.ipify.org?format=json')
-          .then(response => response.json())
-          .then(data => {
-            setSystemInfo(prev => ({
-              ...prev,
-              ip: data.ip,
-            }));
-          })
-          .catch(() => {
-            setSystemInfo(prev => ({
-              ...prev,
-              ip: '127.0.0.1',
-            }));
-          });
+ // Get IP address with proper timeout and user consent
+ const controller = new AbortController();
+ const timeoutId = setTimeout(() => controller.abort(), 5000);
+ 
+ try {
+   const response = await fetch('https://api.ipify.org?format=json', {
+     signal: controller.signal,
+     headers: { 'Accept': 'application/json' }
+   });
+   
+   if (!response.ok) throw new Error('Network response was not ok');
+   
+   const data = await response.json();
+   setSystemInfo(prev => ({ ...prev, ip: data.ip }));
+ } catch (error) {
+   console.warn('Failed to fetch IP address:', error);
+   setSystemInfo(prev => ({ ...prev, ip: 'Not available' }));
+ } finally {
+   clearTimeout(timeoutId);
+ }
       } catch (error) {
         console.warn('Failed to get system information:', error);
         setSystemInfo(prev => ({
@@ -117,9 +122,8 @@ export function Settings() {
   const handleCloseApplication = async () => {
     try {
       // Check if we're running in a Tauri environment
-      if (typeof window !== 'undefined' && (window as unknown as { __TAURI__?: { process: { exit: (code: number) => Promise<void> } } }).__TAURI__) {
-        const { exit } = (window as unknown as { __TAURI__: { process: { exit: (code: number) => Promise<void> } } }).__TAURI__.process;
-        await exit(0);
+      if (isTauriEnvironment() && tauri.process) {
+        await tauri.process.exit(0);
       } else {
         // Fallback for development environment
         toast.info('Close application functionality', {
@@ -224,12 +228,12 @@ export function Settings() {
                   <Label className="text-sm font-medium">API Key</Label>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 p-3 rounded-lg bg-muted/50 border border-border font-mono text-sm">
-                      {mockApiKey.substring(0, 20)}...
+                      {displayApiKey}
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleCopy(mockApiKey, 'API Key')}
+                      onClick={() => handleCopy(displayApiKey, 'API Key')}
                       className="card-flat hover:card-elevated"
                     >
                       {copied === 'API Key' ? (

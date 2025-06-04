@@ -11,6 +11,7 @@ pub async fn generate(
     generate_internal(http, api_key, base_url, website).await
 }
 
+#[allow(dead_code)]
 pub async fn generate_with_api_url(
     http: &reqwest::Client,
     api_key: String,

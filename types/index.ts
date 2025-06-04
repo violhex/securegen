@@ -24,6 +24,7 @@ export interface UsernameConfig {
   // Word variant options
   capitalize?: boolean;
   include_number?: boolean;
+  strength?: 'Basic' | 'Standard' | 'Strong' | 'Maximum';
   
   // Subaddress variant options
   email?: string;

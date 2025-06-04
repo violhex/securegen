@@ -19,9 +19,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 schemars = "0.8"
 tauri = { version = "1.8.1", features = [
-    "os-platform",
-    "os-arch",
-    "os-type",
+    "http-request",
     "app-hide",
     "app-show",
     "process-exit",
@@ -38,6 +36,7 @@ thiserror = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2.1"
+sha2 = "0.10"
 
 [dev-dependencies]
 rand_chacha = "0.3"

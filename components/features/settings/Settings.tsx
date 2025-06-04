@@ -14,7 +14,9 @@ import {
   Shield,
   User,
   HardDrive,
-  Cpu
+  Cpu,
+  Database,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,15 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getSystemInformation } from '@/lib/hardware-id';
 import { tauri, isTauriEnvironment } from '@/types/tauri';
+import { 
+  getAllSecureGenStorageKeys, 
+  hasLegacyStorage, 
+  clearLegacyStorage,
+  cleanupOldStorage,
+  getStorageDetails
+} from '@/lib/storage-migration';
+import { useAppStore } from '@/lib/store';
+import { TauriAPI } from '@/lib/tauri';
 
 
 
@@ -36,6 +47,16 @@ export function Settings() {
     version: '1.0.0',
     buildNumber: '2024.001',
   });
+  const [storageInfo, setStorageInfo] = useState({
+    currentUserKey: '',
+    totalStorageKeys: 0,
+    userSpecificKeys: 0,
+    hasLegacy: false,
+    historyCount: 0,
+    legacyKey: null as string | null,
+  });
+
+  const { history, clearHistory, userStorageKey } = useAppStore();
 
  // Obfuscated display key - actual key should come from secure storage
  const displayApiKey = 'bw_api_****************************';
@@ -73,26 +94,25 @@ export function Settings() {
           platform: sysInfo.platform,
         }));
 
- // Get IP address with proper timeout and user consent
- const controller = new AbortController();
- const timeoutId = setTimeout(() => controller.abort(), 5000);
- 
- try {
-   const response = await fetch('https://api.ipify.org?format=json', {
-     signal: controller.signal,
-     headers: { 'Accept': 'application/json' }
-   });
-   
-   if (!response.ok) throw new Error('Network response was not ok');
-   
-   const data = await response.json();
-   setSystemInfo(prev => ({ ...prev, ip: data.ip }));
- } catch (error) {
-   console.warn('Failed to fetch IP address:', error);
-   setSystemInfo(prev => ({ ...prev, ip: 'Not available' }));
- } finally {
-   clearTimeout(timeoutId);
- }
+        // Update storage information with detailed breakdown
+        const storageDetails = await getStorageDetails();
+        setStorageInfo({
+          currentUserKey: userStorageKey || 'Generating...',
+          totalStorageKeys: storageDetails.totalEntries,
+          userSpecificKeys: storageDetails.userSpecificKeys.length,
+          hasLegacy: storageDetails.hasLegacy,
+          historyCount: history.length,
+          legacyKey: storageDetails.legacyKey,
+        });
+
+        // Get IP address using Tauri's HTTP client for better security
+        try {
+          const maskedIp = await TauriAPI.getPublicIPAddress();
+          setSystemInfo(prev => ({ ...prev, ip: maskedIp }));
+        } catch (error) {
+          console.warn('Failed to fetch IP address:', error);
+          setSystemInfo(prev => ({ ...prev, ip: 'Not available' }));
+        }
       } catch (error) {
         console.warn('Failed to get system information:', error);
         setSystemInfo(prev => ({
@@ -142,6 +162,62 @@ export function Settings() {
     toast.info('Logout functionality not yet implemented', {
       description: 'This will be available in future versions',
     });
+  };
+
+  const handleClearHistory = () => {
+    try {
+      clearHistory();
+      setStorageInfo(prev => ({ ...prev, historyCount: 0 }));
+      toast.success('Password history cleared successfully!');
+    } catch (error) {
+      toast.error('Failed to clear history', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
+
+  const handleClearLegacyStorage = () => {
+    try {
+      if (!hasLegacyStorage()) {
+        toast.info('No legacy storage found to clear');
+        return;
+      }
+      
+      const success = clearLegacyStorage();
+      if (success) {
+        setStorageInfo(prev => ({ ...prev, hasLegacy: false, legacyKey: null }));
+        toast.success('Legacy storage cleared successfully!');
+      } else {
+        toast.error('Failed to clear legacy storage');
+      }
+    } catch (error) {
+      toast.error('Failed to clear legacy storage', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
+
+  const handleCleanupOldStorage = async () => {
+    try {
+      const cleanedCount = await cleanupOldStorage();
+      const storageDetails = await getStorageDetails();
+      
+      setStorageInfo(prev => ({ 
+        ...prev, 
+        totalStorageKeys: storageDetails.totalEntries,
+        userSpecificKeys: storageDetails.userSpecificKeys.length
+      }));
+      
+      if (cleanedCount > 0) {
+        toast.success(`Cleaned up ${cleanedCount} old storage entries!`);
+      } else {
+        toast.info('No old storage entries found to clean up');
+      }
+    } catch (error) {
+      toast.error('Failed to cleanup old storage', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
   };
 
   return (
@@ -372,6 +448,145 @@ export function Settings() {
                       <p className="text-xs text-warning/80">Not connected to vault</p>
                     </div>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.section>
+
+        {/* Storage Management */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          className="lg:col-span-2"
+        >
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <div className="card-flat p-2.5 rounded-lg bg-warning/10">
+                  <Database className="w-5 h-5 text-warning" aria-hidden="true" />
+                </div>
+                Storage Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-muted-foreground" />
+                    User Storage Key
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-2 rounded bg-muted/50 border border-border font-mono text-xs">
+                      {storageInfo.currentUserKey.substring(0, 20)}...
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(storageInfo.currentUserKey, 'Storage Key')}
+                      className="h-8 w-8 p-0"
+                    >
+                      {copied === 'Storage Key' ? (
+                        <CheckCircle className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Database className="w-4 h-4 text-muted-foreground" />
+                    Password History
+                  </Label>
+                  <div className="p-2 rounded bg-muted/50 border border-border text-xs text-center">
+                    {storageInfo.historyCount} items
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <HardDrive className="w-4 h-4 text-muted-foreground" />
+                    Storage Entries
+                  </Label>
+                  <div className="space-y-1">
+                    <div className="p-2 rounded bg-muted/50 border border-border text-xs text-center">
+                      {storageInfo.totalStorageKeys} total
+                    </div>
+                    <div className="p-1 rounded bg-muted/30 text-xs text-center text-muted-foreground">
+                      {storageInfo.userSpecificKeys} user-specific
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                    Legacy Storage
+                  </Label>
+                  <div className={`p-2 rounded border text-xs text-center ${
+                    storageInfo.hasLegacy 
+                      ? 'bg-warning/10 border-warning/20 text-warning' 
+                      : 'bg-success/10 border-success/20 text-success'
+                  }`}>
+                    {storageInfo.hasLegacy ? 'Present' : 'Clean'}
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-foreground">Storage Actions</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Button
+                    variant="outline"
+                    onClick={handleClearHistory}
+                    className="justify-start card-flat hover:card-elevated"
+                    disabled={storageInfo.historyCount === 0}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear History
+                    <Badge variant="secondary" className="ml-auto">
+                      {storageInfo.historyCount}
+                    </Badge>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={handleClearLegacyStorage}
+                    className="justify-start card-flat hover:card-elevated"
+                    disabled={!storageInfo.hasLegacy}
+                  >
+                    <Database className="w-4 h-4 mr-2" />
+                    Clear Legacy
+                    {storageInfo.hasLegacy && (
+                      <Badge variant="destructive" className="ml-auto">
+                        Found
+                      </Badge>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={handleCleanupOldStorage}
+                    className="justify-start card-flat hover:card-elevated"
+                  >
+                    <HardDrive className="w-4 h-4 mr-2" />
+                    Cleanup Old
+                    <Badge variant="secondary" className="ml-auto">
+                      {storageInfo.userSpecificKeys}
+                    </Badge>
+                  </Button>
+                </div>
+                
+                <div className="p-3 rounded-lg bg-info/10 border border-info/20">
+                  <p className="text-xs text-info">
+                    <strong>Storage Privacy:</strong> Your password history is now stored with a unique key based on your hardware ID. 
+                    This ensures that each user on this machine has their own private password history that cannot be accessed by others.
+                  </p>
                 </div>
               </div>
             </CardContent>

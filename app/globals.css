@@ -57,33 +57,33 @@
 
 @theme dark {
   /* WCAG 2.1 AA compliant dark mode colors */
-  --color-background: hsl(0 0% 9%);
-  --color-foreground: hsl(0 0% 98%);
-  --color-card: hsl(0 0% 11%);
-  --color-card-foreground: hsl(0 0% 98%);
-  --color-popover: hsl(0 0% 9%);
-  --color-popover-foreground: hsl(0 0% 98%);
-  --color-primary: hsl(221 83% 65%);
-  --color-primary-foreground: hsl(0 0% 9%);
-  --color-secondary: hsl(217 33% 17%);
-  --color-secondary-foreground: hsl(0 0% 98%);
-  --color-muted: hsl(217 33% 15%);
-  --color-muted-foreground: hsl(215 20% 65%);
-  --color-accent: hsl(217 33% 19%);
-  --color-accent-foreground: hsl(0 0% 98%);
+  --color-background: oklch(0.09 0 0);
+  --color-foreground: oklch(1.00 0 0);
+  --color-card: oklch(0.11 0 0);
+  --color-card-foreground: oklch(1.00 0 0);
+  --color-popover: oklch(0.09 0 0);
+  --color-popover-foreground: oklch(1.00 0 0);
+  --color-primary: oklch(1.00 0 0);
+  --color-primary-foreground: oklch(0 0 0);
+  --color-secondary: oklch(0.25 0 0);
+  --color-secondary-foreground: oklch(1.00 0 0);
+  --color-muted: oklch(0.15 0 0);
+  --color-muted-foreground: oklch(0.65 0 0);
+  --color-accent: oklch(0.19 0 0);
+  --color-accent-foreground: oklch(1.00 0 0);
   --color-destructive: hsl(0 84% 70%);
   --color-destructive-foreground: hsl(0 0% 9%);
   --color-success: hsl(142 71% 55%);
   --color-success-foreground: hsl(0 0% 9%);
   --color-warning: hsl(38 92% 60%);
   --color-warning-foreground: hsl(0 0% 9%);
-  --color-border: hsl(217 33% 19%);
-  --color-input: hsl(217 33% 19%);
-  --color-ring: hsl(221 83% 65%);
+  --color-border: oklch(0.19 0 0);
+  --color-input: oklch(0.19 0 0);
+  --color-ring: oklch(1.00 0 0);
   
   /* Focus indicators for dark mode */
-  --color-focus: hsl(221 83% 65%);
-  --color-focus-visible: hsl(221 83% 65% / 0.2);
+  --color-focus: oklch(1.00 0 0);
+  --color-focus-visible: oklch(1.00 0 0 / 0.2);
   
   /* Chart colors for dark mode */
   --color-chart-1: hsl(221 83% 65%);
@@ -93,14 +93,14 @@
   --color-chart-5: hsl(262 83% 68%);
   
   /* Sidebar colors for dark mode */
-  --color-sidebar: hsl(0 0% 11%);
-  --color-sidebar-foreground: hsl(0 0% 98%);
-  --color-sidebar-primary: hsl(221 83% 65%);
-  --color-sidebar-primary-foreground: hsl(0 0% 9%);
-  --color-sidebar-accent: hsl(217 33% 19%);
-  --color-sidebar-accent-foreground: hsl(0 0% 98%);
-  --color-sidebar-border: hsl(217 33% 19%);
-  --color-sidebar-ring: hsl(221 83% 65%);
+  --color-sidebar: oklch(0.11 0 0);
+  --color-sidebar-foreground: oklch(1.00 0 0);
+  --color-sidebar-primary: oklch(1.00 0 0);
+  --color-sidebar-primary-foreground: oklch(0 0 0);
+  --color-sidebar-accent: oklch(0.19 0 0);
+  --color-sidebar-accent-foreground: oklch(1.00 0 0);
+  --color-sidebar-border: oklch(0.19 0 0);
+  --color-sidebar-ring: oklch(1.00 0 0);
 }
 
 @utility card-flat {
@@ -140,6 +140,88 @@
   border: 1px solid hsla(214, 32%, 91%, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+
+
+
+@utility neuro-button-active {
+  background: linear-gradient(145deg, oklch(0.11 0 0), oklch(0.15 0 0));
+  border: 1px solid oklch(0.25 0 0 / 0.3);
+  box-shadow: 
+    inset 4px 4px 8px oklch(0.05 0 0),
+    inset -4px -4px 8px oklch(0.17 0 0),
+    0 0 20px oklch(1.00 0 0 / 0.15);
+}
+
+@utility neuro-icon-active {
+  box-shadow: 
+    4px 4px 8px oklch(0.05 0 0),
+    -4px -4px 8px oklch(0.17 0 0),
+    0 0 15px oklch(1.00 0 0 / 0.2);
+}
+
+@utility frosted-glass {
+  background: linear-gradient(135deg, 
+    oklch(0.11 0 0 / 0.8) 0%,
+    oklch(0.13 0 0 / 0.6) 50%,
+    oklch(0.09 0 0 / 0.8) 100%
+  );
+  border: 1px solid oklch(0.25 0 0 / 0.2);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 
+    0 8px 32px oklch(0 0 0 / 0.3),
+    inset 0 1px 0 oklch(1.00 0 0 / 0.1),
+    inset 0 -1px 0 oklch(0 0 0 / 0.1);
+}
+
+/* Neumorphism theme overrides */
+.neumorphism-theme .card-flat {
+  background: linear-gradient(145deg, oklch(0.13 0 0), oklch(0.09 0 0));
+  border: 1px solid oklch(0.15 0 0);
+  box-shadow: 
+    6px 6px 12px oklch(0.05 0 0),
+    -6px -6px 12px oklch(0.17 0 0);
+  color: oklch(1.00 0 0);
+}
+
+.neumorphism-theme .card-elevated {
+  background: linear-gradient(145deg, oklch(0.13 0 0), oklch(0.09 0 0));
+  border: 1px solid oklch(0.15 0 0);
+  box-shadow: 
+    8px 8px 16px oklch(0.05 0 0),
+    -8px -8px 16px oklch(0.17 0 0),
+    inset 0 0 0 1px oklch(0.2 0 0 / 0.1);
+  color: oklch(1.00 0 0);
+}
+
+.neumorphism-theme .card-elevated:hover {
+  box-shadow: 
+    12px 12px 24px oklch(0.03 0 0),
+    -12px -12px 24px oklch(0.19 0 0),
+    inset 0 0 0 1px oklch(0.3 0 0 / 0.2),
+    0 0 20px oklch(1.00 0 0 / 0.1);
+}
+
+.neumorphism-theme input,
+.neumorphism-theme textarea,
+.neumorphism-theme select {
+  background: linear-gradient(145deg, oklch(0.11 0 0), oklch(0.15 0 0));
+  border: 1px solid oklch(0.25 0 0 / 0.3);
+  color: oklch(1.00 0 0);
+  box-shadow: 
+    inset 4px 4px 8px oklch(0.05 0 0),
+    inset -4px -4px 8px oklch(0.17 0 0);
+}
+
+.neumorphism-theme input:focus,
+.neumorphism-theme textarea:focus,
+.neumorphism-theme select:focus {
+  box-shadow: 
+    inset 4px 4px 8px oklch(0.05 0 0),
+    inset -4px -4px 8px oklch(0.17 0 0),
+    0 0 20px oklch(1.00 0 0 / 0.15);
+  border-color: oklch(1.00 0 0 / 0.3);
 }
 
 @layer base {
@@ -277,16 +359,29 @@
   }
 
   .neuro-button {
-    @apply card-flat;
+    background: linear-gradient(145deg, oklch(0.13 0 0), oklch(0.09 0 0));
+    border: 1px solid oklch(0.15 0 0);
+    box-shadow: 
+      8px 8px 16px oklch(0.05 0 0),
+      -8px -8px 16px oklch(0.17 0 0),
+      inset 0 0 0 1px oklch(0.2 0 0 / 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .neuro-button:hover {
-    @apply card-elevated;
+    box-shadow: 
+      12px 12px 24px oklch(0.03 0 0),
+      -12px -12px 24px oklch(0.19 0 0),
+      inset 0 0 0 1px oklch(0.3 0 0 / 0.2),
+      0 0 20px oklch(1.00 0 0 / 0.1);
     transform: translateY(-1px);
   }
 
   .neuro-button:active {
-    @apply neuro-inset;
+    box-shadow: 
+      inset 4px 4px 8px oklch(0.05 0 0),
+      inset -4px -4px 8px oklch(0.17 0 0),
+      0 0 20px oklch(1.00 0 0 / 0.15);
     transform: translateY(0);
   }
 

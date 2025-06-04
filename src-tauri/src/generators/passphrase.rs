@@ -1,4 +1,4 @@
-use crate::generators::eff_wordlist::EFF_LONG_WORD_LIST;
+use crate::generators::wordlist::EFF_LONG_WORD_LIST;
 use rand::{seq::SliceRandom, Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

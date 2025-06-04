@@ -25,6 +25,7 @@ const wordUsernameSchema = z.object({
   type: z.literal('Word'),
   capitalize: z.boolean().optional(),
   include_number: z.boolean().optional(),
+  strength: z.enum(['Basic', 'Standard', 'Strong', 'Maximum']).optional(),
 });
 
 // Email subaddress username schema

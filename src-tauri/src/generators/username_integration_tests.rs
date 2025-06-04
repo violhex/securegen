@@ -10,7 +10,6 @@
 use crate::generators::username::{
     generate_username, ForwarderServiceType, UsernameError, UsernameGeneratorRequest,
 };
-use reqwest::StatusCode;
 use serde_json::json;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -613,11 +612,11 @@ mod integration_tests {
             let result = generate_username(request, &client).await;
             assert!(result.is_err(), "Service should return error for 500 response");
             
-            // Should be a Reqwest error due to 500 status
-            if let Err(UsernameError::Reqwest(_)) = result {
+            // Should be an Http error due to 500 status
+            if let Err(UsernameError::Http(_)) = result {
                 // Expected
             } else {
-                panic!("Expected Reqwest error, got: {:?}", result);
+                panic!("Expected Http error, got: {:?}", result);
             }
         }
     }
@@ -701,10 +700,10 @@ mod integration_tests {
         assert!(result.is_err());
         
         // Should be a timeout error
-        if let Err(UsernameError::Reqwest(reqwest_err)) = result {
-            assert!(reqwest_err.is_timeout() || reqwest_err.is_connect());
+        if let Err(UsernameError::Http(http_err)) = result {
+            assert!(http_err.is_timeout() || http_err.is_connect());
         } else {
-            panic!("Expected Reqwest timeout error, got: {:?}", result);
+            panic!("Expected Http timeout error, got: {:?}", result);
         }
     }
 
@@ -736,10 +735,10 @@ mod integration_tests {
         assert!(result.is_err());
         
         // Should be a deserialization error
-        if let Err(UsernameError::Reqwest(_)) = result {
+        if let Err(UsernameError::Http(_)) = result {
             // Expected
         } else {
-            panic!("Expected Reqwest error for malformed JSON, got: {:?}", result);
+            panic!("Expected Http error for malformed JSON, got: {:?}", result);
         }
 
         server.verify().await;

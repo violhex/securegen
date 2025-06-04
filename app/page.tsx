@@ -2,6 +2,8 @@
 
 import { useAppStore } from '@/lib/store';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { StorageProvider } from '@/components/providers/StorageProvider';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { PasswordGenerator } from '@/components/features/password-generator/PasswordGenerator';
 import { PassphraseGenerator } from '@/components/features/passphrase-generator/PassphraseGenerator';
 import { UsernameGenerator } from '@/components/features/username-generator/UsernameGenerator';
@@ -29,8 +31,12 @@ export default function HomePage() {
   };
 
   return (
-    <AppLayout>
-      {renderContent()}
-    </AppLayout>
+    <StorageProvider>
+      <ThemeProvider>
+        <AppLayout>
+          {renderContent()}
+        </AppLayout>
+      </ThemeProvider>
+    </StorageProvider>
   );
 }

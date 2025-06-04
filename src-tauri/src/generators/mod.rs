@@ -2,7 +2,7 @@ pub mod password;
 pub mod passphrase;
 pub mod username;
 pub mod username_forwarders;
-pub mod eff_wordlist;
+pub mod wordlist;
 
 #[cfg(test)]
 pub mod username_integration_tests;

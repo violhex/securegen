@@ -12,7 +12,7 @@ interface TauriPasswordGeneratorRequest {
   numbers: boolean;
   special: boolean;
   length: number;
-  avoid_ambiguous: boolean;
+  avoidAmbiguous: boolean;
   minLowercase?: number;
   minUppercase?: number;
   minNumber?: number;
@@ -32,6 +32,7 @@ type TauriUsernameRequest =
       Word: {
         capitalize: boolean;
         include_number: boolean;
+        strength: 'Basic' | 'Standard' | 'Strong' | 'Maximum';
       };
     }
   | {
@@ -65,6 +66,21 @@ interface PasswordStrength {
   feedback: string[];
 }
 
+interface UsernameStrength {
+  score: number;
+  security_level: string;
+  feedback: string[];
+  privacy_score: number;
+  uniqueness_score: number;
+}
+
+interface IPResponse {
+  ip: string;
+  masked_ip: string;
+  country?: string;
+  region?: string;
+}
+
 export class TauriAPI {
   static async generatePassword(config: PasswordConfig): Promise<string> {
     try {
@@ -75,7 +91,7 @@ export class TauriAPI {
         numbers: config.numbers,
         special: config.special,
         length: config.length,
-        avoid_ambiguous: config.avoid_ambiguous,
+        avoidAmbiguous: config.avoid_ambiguous,
         minLowercase: config.min_lowercase,
         minUppercase: config.min_uppercase,
         minNumber: config.min_number,
@@ -117,6 +133,7 @@ export class TauriAPI {
             Word: {
               capitalize: config.capitalize ?? true,
               include_number: config.include_number ?? false,
+              strength: config.strength ?? 'Standard',
             }
           };
           break;
@@ -281,11 +298,58 @@ export class TauriAPI {
     }
   }
 
+  static async calculateUsernameStrength(username: string): Promise<UsernameStrength> {
+    try {
+      return await invoke('calculate_username_strength', { username });
+    } catch (error) {
+      console.error('Failed to calculate username strength:', error);
+      return this.fallbackUsernameStrength(username);
+    }
+  }
+
   static async savePasswordToFile(password: string): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `password_${timestamp}.txt`;
     await this.exportToFile(password, fileName);
     return fileName;
+  }
+
+  static async getPublicIPAddress(): Promise<string> {
+    try {
+      // Use the new Tauri backend command for better security and reliability
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const response = await invoke('get_public_ip_address') as IPResponse;
+        return response.masked_ip || 'Not available';
+      }
+      
+      // Fallback for development environment
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        const response = await fetch('https://httpbin.org/ip', {
+          signal: controller.signal,
+          headers: { 
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const data = await response.json();
+        const ip = data.origin || 'Not available';
+        const parts = ip.split('.');
+        return parts.length === 4 
+          ? `${parts[0]}.${parts[1]}.${parts[2]}.xxx` 
+          : 'Not available';
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch IP address:', error);
+      return 'Not available';
+    }
   }
 
   private static fallbackPasswordGeneration(config: PasswordConfig): string {
@@ -402,5 +466,66 @@ export class TauriAPI {
     }
     
     return feedback;
+  }
+
+  private static fallbackUsernameStrength(username: string): UsernameStrength {
+    // Simple fallback evaluation for usernames
+    let score = 20; // Start with base score
+    const feedback: string[] = [];
+    
+    // Length check
+    if (username.length < 3) {
+      score = 0;
+      feedback.push('Username too short');
+    } else if (username.length >= 6 && username.length <= 20) {
+      score += 20;
+    }
+    
+    // Check for common patterns
+    const commonWords = ['admin', 'user', 'test', 'skype', 'google', 'facebook'];
+    const hasCommonWord = commonWords.some(word => 
+      username.toLowerCase().includes(word.toLowerCase())
+    );
+    
+    if (hasCommonWord) {
+      score = Math.max(0, score - 40);
+      feedback.push('Contains common word - reduces security');
+    } else {
+      score += 20;
+    }
+    
+    // Check for numbers/special chars
+    if (/\d/.test(username)) {
+      score += 10;
+      feedback.push('Contains numbers - good for uniqueness');
+    }
+    
+    if (/[^a-zA-Z0-9]/.test(username)) {
+      score += 5;
+      feedback.push('Contains special characters');
+    }
+    
+    const finalScore = Math.min(100, Math.max(0, score));
+    
+    let security_level: string;
+    if (finalScore < 30) {
+      security_level = 'Poor - Easily Guessable';
+      feedback.push('Consider using a more unique username');
+    } else if (finalScore < 60) {
+      security_level = 'Fair - Some Privacy Concerns';
+      feedback.push('Username security could be improved');
+    } else if (finalScore < 80) {
+      security_level = 'Good - Reasonably Secure';
+    } else {
+      security_level = 'Excellent - Highly Secure';
+    }
+    
+    return {
+      score: finalScore,
+      security_level,
+      feedback,
+      privacy_score: Math.floor(finalScore * 0.6),
+      uniqueness_score: Math.floor(finalScore * 0.4),
+    };
   }
 } 

@@ -23,10 +23,7 @@
         "exit": true
       },
       "os": {
-        "all": false,
-        "platform": true,
-        "arch": true,
-        "type": true
+        "all": false
       },
       "clipboard": {
         "all": true,
@@ -46,6 +43,15 @@
         "all": false,
         "open": false,
         "save": true
+      },
+      "http": {
+        "all": false,
+        "request": true,
+        "scope": [
+          "https://httpbin.org/*",
+          "https://api.ipify.org/*",
+          "https://ipinfo.io/*"
+        ]
       }
     },
     "bundle": {

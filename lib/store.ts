@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateHardwareId } from '@/lib/hardware-id';
 import type { 
   PasswordConfig, 
   PassphraseConfig, 
@@ -51,6 +52,32 @@ function generateUUID(): string {
   });
 }
 
+// Generate user-specific storage key based on hardware ID
+let userStorageKey: string | null = null;
+
+async function getUserStorageKey(): Promise<string> {
+  if (userStorageKey) {
+    return userStorageKey;
+  }
+  
+  try {
+    const hardwareId = await generateHardwareId();
+    // Create a shorter, more manageable key from the hardware ID
+    const keyHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hardwareId));
+    const keyArray = Array.from(new Uint8Array(keyHash));
+    const shortKey = keyArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    userStorageKey = `securegen-store-${shortKey}`;
+    return userStorageKey;
+  } catch (error) {
+    console.warn('Failed to generate user-specific storage key, using fallback:', error);
+    // Fallback to a timestamp-based key to ensure uniqueness
+    const fallbackKey = `securegen-store-${Date.now().toString(16)}`;
+    userStorageKey = fallbackKey;
+    return fallbackKey;
+  }
+}
+
 interface AppStore {
   // Generator Configurations
   passwordConfig: PasswordConfig;
@@ -68,6 +95,10 @@ interface AppStore {
   // UI State
   activeTab: GeneratorType;
   isGenerating: boolean;
+  isNeumorphismEnabled: boolean;
+  
+  // User identification
+  userStorageKey: string;
   
   // Actions
   setPasswordConfig: (config: Partial<PasswordConfig>) => void;
@@ -84,11 +115,16 @@ interface AppStore {
   
   setActiveTab: (tab: GeneratorType) => void;
   setIsGenerating: (generating: boolean) => void;
+  toggleNeumorphism: () => void;
+  
+  // Initialize user-specific storage
+  initializeUserStorage: () => Promise<void>;
 }
 
+// Create the store with dynamic storage key
 export const useAppStore = create<AppStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial configurations
       passwordConfig: {
         length: 16,
@@ -112,6 +148,7 @@ export const useAppStore = create<AppStore>()(
         type: 'Word',
         capitalize: true,
         include_number: false,
+        strength: 'Standard',
       },
       
       // Generated content
@@ -125,6 +162,10 @@ export const useAppStore = create<AppStore>()(
       // UI state
       activeTab: 'password',
       isGenerating: false,
+      isNeumorphismEnabled: false,
+      
+      // User identification
+      userStorageKey: '',
       
       // Actions
       setPasswordConfig: (config) =>
@@ -167,16 +208,84 @@ export const useAppStore = create<AppStore>()(
       
       setActiveTab: (tab) => set({ activeTab: tab }),
       setIsGenerating: (generating) => set({ isGenerating: generating }),
+      toggleNeumorphism: () => set((state) => ({ 
+        isNeumorphismEnabled: !state.isNeumorphismEnabled 
+      })),
+      
+      // Initialize user-specific storage
+      initializeUserStorage: async () => {
+        try {
+          const storageKey = await getUserStorageKey();
+          set({ userStorageKey: storageKey });
+          
+          // Log for debugging (remove in production)
+          console.log(`Initialized user-specific storage with key: ${storageKey}`);
+        } catch (error) {
+          console.error('Failed to initialize user-specific storage:', error);
+        }
+      },
     }),
     {
-      name: 'securegen-store',
+      name: 'securegen-store', // This will be dynamically updated
       partialize: (state) => ({
         passwordConfig: state.passwordConfig,
         passphraseConfig: state.passphraseConfig,
         usernameConfig: state.usernameConfig,
         history: state.history,
         activeTab: state.activeTab,
+        isNeumorphismEnabled: state.isNeumorphismEnabled,
+        userStorageKey: state.userStorageKey,
       }),
+      // Custom storage implementation to handle dynamic keys
+      storage: {
+        getItem: async (name: string) => {
+          try {
+            // Check if we're in a browser environment
+            if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+              return null;
+            }
+            
+            const key = userStorageKey || await getUserStorageKey();
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : null;
+          } catch (error) {
+            console.error('Failed to get item from storage:', error);
+            return null;
+          }
+        },
+        setItem: async (name: string, value: any) => {
+          try {
+            // Check if we're in a browser environment
+            if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+              return;
+            }
+            
+            const key = userStorageKey || await getUserStorageKey();
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch (error) {
+            console.error('Failed to set item in storage:', error);
+          }
+        },
+        removeItem: async (name: string) => {
+          try {
+            // Check if we're in a browser environment
+            if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+              return;
+            }
+            
+            const key = userStorageKey || await getUserStorageKey();
+            localStorage.removeItem(key);
+          } catch (error) {
+            console.error('Failed to remove item from storage:', error);
+          }
+        },
+      },
     }
   )
-); 
+);
+
+// Initialize the store with user-specific storage on first load
+if (typeof window !== 'undefined') {
+  // Initialize user storage when the module loads
+  useAppStore.getState().initializeUserStorage().catch(console.error);
+} 

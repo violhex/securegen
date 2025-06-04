@@ -1,6 +1,6 @@
-use crate::generators::eff_wordlist::EFF_LONG_WORD_LIST;
+use crate::generators::wordlist::EFF_LONG_WORD_LIST;
 use crate::generators::username_forwarders;
-use rand::{distributions::Distribution, seq::SliceRandom, Rng, RngCore};
+use rand::{distributions::Distribution, seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -12,8 +12,6 @@ pub enum UsernameError {
     DomainRejected,
     #[error("Rate limit exceeded - please wait before making more requests")]
     RateLimitExceeded,
-    #[error("Request rejected by remote service")]
-    RemoteRejected,
     #[error("Network error occurred while making HTTP request")]
     Http(#[from] reqwest::Error),
     #[error("Unknown error")]
@@ -28,6 +26,57 @@ pub enum UsernameError {
     EmptyWebsiteName,
     #[error("API configuration is incomplete for {service}")]
     IncompleteApiConfig { service: String },
+}
+
+/// Username strength levels for word-based generation
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub enum UsernameStrength {
+    /// Basic words (3-4 characters, common words)
+    Basic,
+    /// Standard words (5-6 characters, moderately common)
+    Standard,
+    /// Strong words (7-8 characters, less common)
+    Strong,
+    /// Maximum words (9+ characters, rare/complex words)
+    Maximum,
+}
+
+impl UsernameStrength {
+    /// Get the minimum word length for this strength level
+    fn min_length(&self) -> usize {
+        match self {
+            UsernameStrength::Basic => 3,
+            UsernameStrength::Standard => 5,
+            UsernameStrength::Strong => 7,
+            UsernameStrength::Maximum => 9,
+        }
+    }
+
+    /// Get the maximum word length for this strength level
+    fn max_length(&self) -> usize {
+        match self {
+            UsernameStrength::Basic => 4,
+            UsernameStrength::Standard => 6,
+            UsernameStrength::Strong => 8,
+            UsernameStrength::Maximum => usize::MAX,
+        }
+    }
+
+    /// Get words that match this strength level
+    fn filter_words(&self) -> Vec<&'static str> {
+        let min_len = self.min_length();
+        let max_len = self.max_length();
+        
+        EFF_LONG_WORD_LIST
+            .iter()
+            .filter(|word| {
+                let len = word.len();
+                len >= min_len && len <= max_len
+            })
+            .copied()
+            .collect()
+    }
 }
 
 /// Append type for subaddress and catchall username generation
@@ -81,6 +130,8 @@ pub enum UsernameGeneratorRequest {
         capitalize: bool,
         /// Include a 4 digit number at the end of the word
         include_number: bool,
+        /// Strength level for word selection
+        strength: UsernameStrength,
     },
     /// Generates an email using your provider's subaddressing capabilities.
     /// Note that not all providers support this functionality.
@@ -224,8 +275,8 @@ pub async fn generate_username(
     
     use rand::thread_rng;
     match input {
-        UsernameGeneratorRequest::Word { capitalize, include_number } => {
-            Ok(username_word(&mut thread_rng(), capitalize, include_number))
+        UsernameGeneratorRequest::Word { capitalize, include_number, strength } => {
+            Ok(username_word(&mut thread_rng(), capitalize, include_number, strength))
         }
         UsernameGeneratorRequest::Subaddress { r#type, email } => {
             Ok(username_subaddress(&mut thread_rng(), r#type, email))
@@ -271,10 +322,19 @@ impl ForwarderServiceType {
 }
 
 /// Generate a word-based username
-fn username_word(mut rng: impl Rng, capitalize: bool, include_number: bool) -> String {
-    let word = EFF_LONG_WORD_LIST
+fn username_word(mut rng: impl Rng, capitalize: bool, include_number: bool, strength: UsernameStrength) -> String {
+    let filtered_words = strength.filter_words();
+    
+    // Fallback to full list if no words match the criteria (shouldn't happen with current strength levels)
+    let word_list = if filtered_words.is_empty() {
+        EFF_LONG_WORD_LIST
+    } else {
+        &filtered_words
+    };
+    
+    let word = word_list
         .choose(&mut rng)
-        .expect("slice is not empty");
+        .expect("word list is not empty");
 
     let mut word = if capitalize {
         capitalize_first_letter(word)
@@ -353,18 +413,39 @@ mod tests {
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([0u8; 32]);
         
         // Test basic word generation
-        let username = username_word(&mut rng, false, false);
+        let username = username_word(&mut rng, false, false, UsernameStrength::Standard);
         assert!(!username.is_empty());
         assert!(username.chars().all(|c| c.is_ascii_lowercase()));
         
         // Test capitalized word
-        let username_cap = username_word(&mut rng, true, false);
+        let username_cap = username_word(&mut rng, true, false, UsernameStrength::Standard);
         assert!(username_cap.chars().next().unwrap().is_ascii_uppercase());
         
         // Test with numbers
-        let username_num = username_word(&mut rng, false, true);
+        let username_num = username_word(&mut rng, false, true, UsernameStrength::Standard);
         assert!(username_num.len() > 4); // Should have word + 4 digit number
         assert!(username_num.chars().rev().take(4).all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_username_strength_levels() {
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed([0u8; 32]);
+        
+        // Test basic strength (3-4 characters)
+        let basic_username = username_word(&mut rng, false, false, UsernameStrength::Basic);
+        assert!(basic_username.len() >= 3 && basic_username.len() <= 4);
+        
+        // Test standard strength (5-6 characters)
+        let standard_username = username_word(&mut rng, false, false, UsernameStrength::Standard);
+        assert!(standard_username.len() >= 5 && standard_username.len() <= 6);
+        
+        // Test strong strength (7-8 characters)
+        let strong_username = username_word(&mut rng, false, false, UsernameStrength::Strong);
+        assert!(strong_username.len() >= 7 && strong_username.len() <= 8);
+        
+        // Test maximum strength (9+ characters)
+        let max_username = username_word(&mut rng, false, false, UsernameStrength::Maximum);
+        assert!(max_username.len() >= 9);
     }
 
     #[test]
@@ -418,16 +499,16 @@ mod tests {
         assert!(num.chars().all(|c| c.is_ascii_digit()));
         
         // Test that it can generate leading zeros
-        let mut found_leading_zero = false;
+        let mut _found_leading_zero = false;
         for _ in 0..100 {
             let num = random_number(&mut rng);
             if num.starts_with('0') {
-                found_leading_zero = true;
+                _found_leading_zero = true;
                 break;
             }
         }
         // This might occasionally fail due to randomness, but very unlikely
-        // assert!(found_leading_zero, "Should be able to generate numbers with leading zeros");
+        // assert!(_found_leading_zero, "Should be able to generate numbers with leading zeros");
     }
 
     #[test]
@@ -453,12 +534,13 @@ mod tests {
     #[test]
     fn test_json_deserialization() {
         // Test Word variant
-        let word_json = r#"{"Word":{"capitalize":true,"include_number":false}}"#;
+        let word_json = r#"{"Word":{"capitalize":true,"include_number":false,"strength":"Standard"}}"#;
         let word_request: UsernameGeneratorRequest = serde_json::from_str(word_json).unwrap();
         match word_request {
-            UsernameGeneratorRequest::Word { capitalize, include_number } => {
+            UsernameGeneratorRequest::Word { capitalize, include_number, strength } => {
                 assert_eq!(capitalize, true);
                 assert_eq!(include_number, false);
+                assert!(matches!(strength, UsernameStrength::Standard));
             }
             _ => panic!("Expected Word variant"),
         }
@@ -501,4 +583,6 @@ mod tests {
             _ => panic!("Expected Catchall variant"),
         }
     }
+
+
 } 

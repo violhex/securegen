@@ -50,6 +50,7 @@ export function UsernameGenerator() {
       type: usernameConfig.type || 'Word',
       capitalize: usernameConfig.capitalize ?? true,
       include_number: usernameConfig.include_number ?? false,
+      strength: usernameConfig.strength ?? 'Standard',
       email: usernameConfig.email || '',
       append_type: usernameConfig.append_type || 'Random',
       website: usernameConfig.website || '',
@@ -77,11 +78,11 @@ export function UsernameGenerator() {
   // Calculate username strength when username changes
   useEffect(() => {
     if (currentUsername) {
-      TauriAPI.calculatePasswordStrength(currentUsername)
+      TauriAPI.calculateUsernameStrength(currentUsername)
         .then((result) => {
           setStrength(result.score);
           setStrengthDetails({
-            crack_times_display: result.crack_times_display,
+            crack_times_display: result.security_level,
             feedback: result.feedback,
           });
         })
@@ -153,10 +154,12 @@ export function UsernameGenerator() {
   };
 
   const getStrengthLabel = (score: number) => {
-    if (score < 30) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
-    if (score < 60) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
-    if (score < 80) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
-    return { label: 'Strong', color: 'strength-strong', icon: CheckCircle };
+    // Username security labels are more focused on privacy and uniqueness
+    if (score < 30) return { label: 'Poor', color: 'text-destructive bg-destructive/10', icon: AlertCircle };
+    if (score < 50) return { label: 'Fair', color: 'text-orange-600 bg-orange-100', icon: AlertCircle };
+    if (score < 70) return { label: 'Good', color: 'text-blue-600 bg-blue-100', icon: CheckCircle };
+    if (score < 85) return { label: 'Excellent', color: 'text-green-600 bg-green-100', icon: CheckCircle };
+    return { label: 'Perfect', color: 'text-green-700 bg-green-200', icon: CheckCircle };
   };
 
   const strengthInfo = getStrengthLabel(strength);
@@ -274,6 +277,34 @@ export function UsernameGenerator() {
                           </p>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="strength" className="text-sm font-medium text-foreground">
+                        Word Strength Level
+                      </Label>
+                      <Select
+                        value={form.watch('strength') || 'Standard'}
+                        onValueChange={(value: 'Basic' | 'Standard' | 'Strong' | 'Maximum') => 
+                          form.setValue('strength', value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select strength level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Basic">Basic (3-5 chars)</SelectItem>
+                          <SelectItem value="Standard">Standard (6-8 chars)</SelectItem>
+                          <SelectItem value="Strong">Strong (9-12 chars)</SelectItem>
+                          <SelectItem value="Maximum">Maximum (13+ chars)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {form.watch('strength') === 'Basic' && 'Short, common words for simplicity'}
+                        {form.watch('strength') === 'Standard' && 'Balanced length and complexity'}
+                        {form.watch('strength') === 'Strong' && 'Longer words for better security'}
+                        {form.watch('strength') === 'Maximum' && 'Very long words for maximum security'}
+                      </p>
                     </div>
                   </div>
                 </fieldset>
@@ -605,28 +636,34 @@ export function UsernameGenerator() {
                   </div>
                 </div>
 
-                {/* Strength Meter */}
+                {/* Username Security Assessment */}
                 {currentUsername && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Strength</span>
+                      <span className="text-sm font-medium text-foreground">Security Rating</span>
                       <div className="flex items-center gap-2">
-                        <StrengthIcon className={cn("w-4 h-4", strengthInfo.color)} />
-                        <Badge variant="secondary" className={cn("card-flat", strengthInfo.color)}>
+                        <StrengthIcon className="w-4 h-4" />
+                        <Badge className={cn("text-xs font-medium px-2 py-1", strengthInfo.color)}>
                           {strengthInfo.label}
                         </Badge>
                       </div>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2">
+                    <div className="w-full bg-muted/50 rounded-full h-2.5 overflow-hidden">
                       <div
-                        className={cn("h-2 rounded-full transition-all duration-300", strengthInfo.color)}
-                        style={{ width: `${strength}%` }}
+                        className="h-full rounded-full transition-all duration-500 ease-out bg-gradient-to-r from-current to-current opacity-90"
+                        style={{ 
+                          width: `${strength}%`,
+                          backgroundColor: strength < 30 ? '#ef4444' : 
+                                         strength < 50 ? '#f97316' : 
+                                         strength < 70 ? '#3b82f6' : 
+                                         strength < 85 ? '#10b981' : '#059669'
+                        }}
                       />
                     </div>
                     {strengthDetails && (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">
-                          <strong>Time to crack:</strong> {strengthDetails.crack_times_display}
+                          <strong>Privacy Level:</strong> {strengthDetails.crack_times_display}
                         </p>
                         {strengthDetails.feedback.length > 0 && (
                           <div className="space-y-1">

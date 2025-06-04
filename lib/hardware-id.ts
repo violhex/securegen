@@ -24,15 +24,20 @@ export interface SystemInfo {
  * Collect system information for hardware ID generation
  */
 async function collectSystemInfo(): Promise<SystemInfo> {
+  // Check if we're in a browser environment
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    throw new Error('Hardware ID generation requires browser environment');
+  }
+
   const baseInfo: SystemInfo = {
     platform: navigator.platform,
     userAgent: navigator.userAgent,
     language: navigator.language,
     timezone: new Date().getTimezoneOffset(),
     screen: {
-      width: screen.width,
-      height: screen.height,
-      colorDepth: screen.colorDepth,
+      width: typeof screen !== 'undefined' ? screen.width : 1920,
+      height: typeof screen !== 'undefined' ? screen.height : 1080,
+      colorDepth: typeof screen !== 'undefined' ? screen.colorDepth : 24,
     },
     hardware: {
       concurrency: navigator.hardwareConcurrency || 4,
@@ -113,14 +118,15 @@ function formatHardwareId(hash: string): string {
  */
 function generateFallbackId(): string {
   try {
-    // Use timestamp and random values as fallback
+    // Use a combination of timestamp and deterministic values as fallback
+    // This ensures no personal information is leaked
     const timestamp = Date.now().toString(16).toUpperCase().padStart(12, '0');
-    const random = Math.random().toString(16).substring(2, 6).toUpperCase();
+    const sessionId = Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
     
-    return `HWID-${timestamp.substring(0, 4)}-${timestamp.substring(4, 8)}-${timestamp.substring(8, 12)}-${random}`;
+    return `HWID-${timestamp.substring(0, 4)}-${timestamp.substring(4, 8)}-${timestamp.substring(8, 12)}-${sessionId}`;
   } catch {
-    // Ultimate fallback
-    return 'HWID-FALLBACK-ERROR-GENERATING';
+    // Ultimate fallback - completely generic
+    return 'HWID-0000-0000-0000-0000';
   }
 }
 

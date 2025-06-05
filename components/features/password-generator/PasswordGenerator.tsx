@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, RefreshCw, Save, Eye, EyeOff, CheckCircle, AlertCircle, Plus, Minus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -87,6 +87,21 @@ export function PasswordGenerator() {
     }
   }, [currentPassword]);
 
+  const handleGenerate = useCallback(async () => {
+    try {
+      await generatePassword();
+      toast.success('Password generated successfully!');
+    } catch (error) {
+      toast.error('Failed to generate password', {
+        description: error instanceof Error ? error.message : 'Generation failed',
+        action: {
+          label: 'Retry',
+          onClick: () => handleGenerate(),
+        },
+      });
+    }
+  }, [generatePassword]);
+
   // Listen for tray-triggered password generation
   useEffect(() => {
     const handleTrayGeneration = () => {
@@ -98,7 +113,7 @@ export function PasswordGenerator() {
     return () => {
       window.removeEventListener('tray-generate-password', handleTrayGeneration);
     };
-  }, []);
+  }, [handleGenerate]);
 
   const handleCopy = async () => {
     if (currentPassword) {
@@ -138,21 +153,6 @@ export function PasswordGenerator() {
         });
         setTimeout(() => setSaveMessage(''), 3000);
       }
-    }
-  };
-
-  const handleGenerate = async () => {
-    try {
-      await generatePassword();
-      toast.success('Password generated successfully!');
-    } catch (error) {
-      toast.error('Failed to generate password', {
-        description: error instanceof Error ? error.message : 'Generation failed',
-        action: {
-          label: 'Retry',
-          onClick: () => handleGenerate(),
-        },
-      });
     }
   };
 

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
 
 // Import window functions for Tauri v1 (using allowlist)
-let appWindow: any = null;
+let appWindow: typeof import('@tauri-apps/api/window').appWindow | null = null;
 
 if (typeof window !== 'undefined') {
   import('@tauri-apps/api/window').then(({ appWindow: window }) => {

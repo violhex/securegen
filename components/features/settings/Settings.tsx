@@ -16,7 +16,13 @@ import {
   HardDrive,
   Cpu,
   Database,
-  Trash2
+  Trash2,
+  Download,
+  Upload,
+  FileDown,
+  FileUp,
+  RefreshCw,
+  Wrench
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -32,6 +38,10 @@ import {
   cleanupOldStorage,
   getStorageDetails
 } from '@/lib/storage-migration';
+import { 
+  StorageIntegrityManager, 
+  StorageKeyManager 
+} from '@/lib/storage-enhanced';
 import { useAppStore } from '@/lib/store';
 import { TauriAPI } from '@/lib/tauri';
 
@@ -53,6 +63,14 @@ export function Settings() {
     hasLegacy: false,
     historyCount: 0,
     legacyKey: null as string | null,
+  });
+
+  const [storageOperations, setStorageOperations] = useState({
+    isPerformingIntegrityCheck: false,
+    isExporting: false,
+    isImporting: false,
+    lastIntegrityCheck: null as Date | null,
+    integrityResult: null as any,
   });
 
   const { history, clearHistory, userStorageKey } = useAppStore();
@@ -214,6 +232,153 @@ export function Settings() {
       }
     } catch (error) {
       toast.error('Failed to cleanup old storage', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
+
+  const handleStorageIntegrityCheck = async () => {
+    try {
+      setStorageOperations(prev => ({ ...prev, isPerformingIntegrityCheck: true }));
+      
+      const result = await StorageIntegrityManager.performIntegrityCheck();
+      
+      setStorageOperations(prev => ({
+        ...prev,
+        isPerformingIntegrityCheck: false,
+        lastIntegrityCheck: new Date(),
+        integrityResult: result,
+      }));
+
+      if (result.valid) {
+        toast.success('Storage integrity check passed!', {
+          description: result.cleanedEntries > 0 
+            ? `Cleaned ${result.cleanedEntries} corrupted entries` 
+            : 'All storage entries are valid',
+        });
+      } else {
+        toast.warning('Storage integrity issues found', {
+          description: `${result.issues.length} issues detected and addressed`,
+        });
+      }
+
+      // Refresh storage info
+      const storageDetails = await getStorageDetails();
+      setStorageInfo(prev => ({
+        ...prev,
+        totalStorageKeys: storageDetails.totalEntries,
+        userSpecificKeys: storageDetails.userSpecificKeys.length,
+      }));
+    } catch (error) {
+      setStorageOperations(prev => ({ ...prev, isPerformingIntegrityCheck: false }));
+      toast.error('Storage integrity check failed', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      setStorageOperations(prev => ({ ...prev, isExporting: true }));
+      
+      const exportData = await StorageIntegrityManager.exportUserData();
+      
+      // Create downloadable file
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `securegen-backup-${timestamp}.json`;
+      
+      // Trigger download (works in both Tauri and browser environments)
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Data exported successfully!', {
+        description: `Backup downloaded as ${filename}`,
+      });
+    } catch (error) {
+      toast.error('Failed to export data', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    } finally {
+      setStorageOperations(prev => ({ ...prev, isExporting: false }));
+    }
+  };
+
+  const handleImportData = async () => {
+    try {
+      setStorageOperations(prev => ({ ...prev, isImporting: true }));
+      
+      // Use file input (works in both Tauri and browser environments)
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        
+        try {
+          const text = await file.text();
+          const importData = JSON.parse(text);
+          
+          const success = await StorageIntegrityManager.importUserData(importData);
+          
+          if (success) {
+            toast.success('Data imported successfully!', {
+              description: 'Your settings and history have been restored',
+            });
+            
+            // Refresh the page to load imported data
+            window.location.reload();
+          } else {
+            toast.error('Failed to import data', {
+              description: 'The backup file may be corrupted or incompatible',
+            });
+          }
+        } catch (parseError) {
+          toast.error('Invalid backup file', {
+            description: 'The selected file is not a valid SecureGen backup',
+          });
+        }
+      };
+      input.click();
+    } catch (error) {
+      toast.error('Failed to import data', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    } finally {
+      setStorageOperations(prev => ({ ...prev, isImporting: false }));
+    }
+  };
+
+  const handleResetStorageKey = async () => {
+    try {
+      // Clear the storage key cache to force regeneration
+      StorageKeyManager.clearCache();
+      
+      toast.success('Storage key reset!', {
+        description: 'The app will regenerate your storage key on next startup',
+      });
+      
+      // Refresh storage info
+      setTimeout(async () => {
+        const storageDetails = await getStorageDetails();
+        setStorageInfo(prev => ({
+          ...prev,
+          currentUserKey: 'Will regenerate on restart',
+          totalStorageKeys: storageDetails.totalEntries,
+        }));
+      }, 1000);
+    } catch (error) {
+      toast.error('Failed to reset storage key', {
         description: error instanceof Error ? error.message : 'Unknown error occurred',
       });
     }
@@ -541,7 +706,7 @@ export function Settings() {
 
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-foreground">Storage Actions</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Button
                     variant="outline"
                     onClick={handleClearHistory}
@@ -581,12 +746,99 @@ export function Settings() {
                       {storageInfo.userSpecificKeys}
                     </Badge>
                   </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleStorageIntegrityCheck}
+                    className="justify-start card-flat hover:card-elevated"
+                    disabled={storageOperations.isPerformingIntegrityCheck}
+                  >
+                    {storageOperations.isPerformingIntegrityCheck ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Wrench className="w-4 h-4 mr-2" />
+                    )}
+                    Check Integrity
+                    {storageOperations.integrityResult && (
+                      <Badge 
+                        variant={storageOperations.integrityResult.valid ? "default" : "destructive"} 
+                        className="ml-auto"
+                      >
+                        {storageOperations.integrityResult.valid ? "OK" : "Issues"}
+                      </Badge>
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleExportData}
+                    className="justify-start card-flat hover:card-elevated"
+                    disabled={storageOperations.isExporting}
+                  >
+                    {storageOperations.isExporting ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Export Data
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleImportData}
+                    className="justify-start card-flat hover:card-elevated"
+                    disabled={storageOperations.isImporting}
+                  >
+                    {storageOperations.isImporting ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    Import Data
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleResetStorageKey}
+                    className="justify-start card-flat hover:card-elevated col-span-full md:col-span-1"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset Storage Key
+                  </Button>
                 </div>
                 
+                {/* Enhanced Storage Status */}
+                {storageOperations.lastIntegrityCheck && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium">Last Integrity Check</p>
+                      <Badge variant={storageOperations.integrityResult?.valid ? "default" : "destructive"}>
+                        {storageOperations.integrityResult?.valid ? "Passed" : "Issues Found"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {storageOperations.lastIntegrityCheck.toLocaleString()}
+                    </p>
+                    {storageOperations.integrityResult && (
+                      <div className="mt-2 text-xs">
+                        {storageOperations.integrityResult.cleanedEntries > 0 && (
+                          <p className="text-warning">• Cleaned {storageOperations.integrityResult.cleanedEntries} corrupted entries</p>
+                        )}
+                        {storageOperations.integrityResult.migratedEntries > 0 && (
+                          <p className="text-success">• Migrated {storageOperations.integrityResult.migratedEntries} legacy entries</p>
+                        )}
+                        {storageOperations.integrityResult.issues.length > 0 && (
+                          <p className="text-destructive">• {storageOperations.integrityResult.issues.length} issues detected</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-3 rounded-lg bg-info/10 border border-info/20">
                   <p className="text-xs text-info">
-                    <strong>Storage Privacy:</strong> Your password history is now stored with a unique key based on your hardware ID. 
-                    This ensures that each user on this machine has their own private password history that cannot be accessed by others.
+                    <strong>Enhanced Storage:</strong> Your data is now protected with improved hardware fingerprinting, 
+                    automatic integrity checks, and export/import capabilities for cross-device migration.
                   </p>
                 </div>
               </div>

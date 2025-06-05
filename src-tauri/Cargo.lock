@@ -68,6 +68,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "futures",
+ "get_if_addrs",
  "machine-uid",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -324,6 +325,12 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "c_linked_list"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
 name = "cairo-rs"
@@ -795,7 +802,7 @@ checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
 dependencies = [
  "libc",
  "redox_users",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1126,6 +1133,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcc"
+version = "0.3.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
+
+[[package]]
 name = "gdk"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1235,6 +1248,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "get_if_addrs"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abddb55a898d32925f3148bd281174a68eeb68bbfd9a5938a57b18f506ee4ef7"
+dependencies = [
+ "c_linked_list",
+ "get_if_addrs-sys",
+ "libc",
+ "winapi 0.2.8",
+]
+
+[[package]]
+name = "get_if_addrs-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d04f9fb746cf36b191c00f3ede8bde9c8e64f9f4b05ae2694a9ccf5e3f5ab48"
+dependencies = [
+ "gcc",
+ "libc",
+]
+
+[[package]]
 name = "gethostname"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1311,7 +1346,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps 6.2.2",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2081,7 +2116,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
  "cfg-if",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2320,7 +2355,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
 dependencies = [
  "overload",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4725,6 +4760,12 @@ name = "weezl"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a751b3277700db47d3e574514de2eced5e54dc8a5436a3bf7a0b248b2cee16f3"
+
+[[package]]
+name = "winapi"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 
 [[package]]
 name = "winapi"

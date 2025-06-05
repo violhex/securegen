@@ -361,36 +361,60 @@ export class TauriAPI {
         const response = await invoke('get_public_ip_address') as IPResponse;
         const ip = response.ip || response.masked_ip || 'Not available';
         
-        // Apply consistent masking to backend response
-        return this.maskIp(ip);
+        // The backend now provides better local IP detection, so we trust its response
+        return ip === 'Local Network' ? 'Local Network' : this.maskIp(ip);
       }
       
-      // Fallback for development environment
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
+      // Fallback for development environment - use local detection
       try {
-        const response = await fetch('https://httpbin.org/ip', {
-          signal: controller.signal,
-          headers: { 
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        });
-        
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
-        const ip = data.origin || 'Not available';
-        
-        // Apply consistent masking to fallback response
-        return this.maskIp(ip);
-      } finally {
-        clearTimeout(timeoutId);
+        // Try to determine if we're on a local network
+        const localIp = await this.detectLocalIP();
+        if (localIp) {
+          return this.maskIp(localIp);
+        }
+      } catch (error) {
+        console.warn('Local IP detection failed:', error);
       }
+      
+      return 'Local Network';
     } catch (error) {
       console.warn('Failed to fetch IP address:', error);
       return 'Not available';
+    }
+  }
+
+  private static async detectLocalIP(): Promise<string | null> {
+    try {
+      // Create a dummy WebRTC connection to detect local IP
+      const rtc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+      
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          rtc.close();
+          resolve(null);
+        }, 3000);
+        
+        rtc.onicecandidate = (event) => {
+          if (event.candidate) {
+            const candidate = event.candidate.candidate;
+            const ipMatch = candidate.match(/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/);
+            if (ipMatch && !ipMatch[1].startsWith('127.')) {
+              clearTimeout(timeout);
+              rtc.close();
+              resolve(ipMatch[1]);
+            }
+          }
+        };
+        
+        // Create a data channel to trigger ICE candidate gathering
+        rtc.createDataChannel('test');
+        rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
+      });
+    } catch (error) {
+      console.warn('WebRTC IP detection failed:', error);
+      return null;
     }
   }
 

@@ -59,9 +59,7 @@
         "all": false,
         "request": true,
         "scope": [
-          "https://httpbin.org/*",
-          "https://api.ipify.org/*",
-          "https://ipinfo.io/*"
+          "https://httpbin.org/*"
         ]
       }
     },

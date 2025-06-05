@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, RefreshCw, Save, Eye, EyeOff, CheckCircle, AlertCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
@@ -97,6 +97,21 @@ export function UsernameGenerator() {
     }
   }, [currentUsername]);
 
+  const handleGenerate = useCallback(async () => {
+    try {
+      await generateUsername();
+      toast.success('Username generated successfully!');
+    } catch (error) {
+      toast.error('Failed to generate username', {
+        description: error instanceof Error ? error.message : 'Generation failed',
+        action: {
+          label: 'Retry',
+          onClick: () => handleGenerate(),
+        },
+      });
+    }
+  }, [generateUsername]);
+
   // Listen for tray-triggered username generation
   useEffect(() => {
     const handleTrayGeneration = () => {
@@ -108,7 +123,7 @@ export function UsernameGenerator() {
     return () => {
       window.removeEventListener('tray-generate-username', handleTrayGeneration);
     };
-  }, []);
+  }, [handleGenerate]);
 
   const handleCopy = async () => {
     if (currentUsername) {
@@ -148,21 +163,6 @@ export function UsernameGenerator() {
         });
         setTimeout(() => setSaveMessage(''), 3000);
       }
-    }
-  };
-
-  const handleGenerate = async () => {
-    try {
-      await generateUsername();
-      toast.success('Username generated successfully!');
-    } catch (error) {
-      toast.error('Failed to generate username', {
-        description: error instanceof Error ? error.message : 'Generation failed',
-        action: {
-          label: 'Retry',
-          onClick: () => handleGenerate(),
-        },
-      });
     }
   };
 

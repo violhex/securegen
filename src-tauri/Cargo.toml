@@ -47,6 +47,7 @@ chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2.1"
 sha2 = "0.10"
 machine-uid = "0.5"
+get_if_addrs = "0.5"
 
 [dev-dependencies]
 rand_chacha = "0.3"

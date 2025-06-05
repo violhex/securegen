@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, RefreshCw, Save, Eye, EyeOff, CheckCircle, AlertCircle, Hash } from 'lucide-react';
 import { toast } from 'sonner';
@@ -89,6 +89,21 @@ export function PassphraseGenerator() {
     }
   }, [currentPassphrase]);
 
+  const handleGenerate = useCallback(async () => {
+    try {
+      await generatePassphrase();
+      toast.success('Passphrase generated successfully!');
+    } catch (error) {
+      toast.error('Failed to generate passphrase', {
+        description: error instanceof Error ? error.message : 'Generation failed',
+        action: {
+          label: 'Retry',
+          onClick: () => handleGenerate(),
+        },
+      });
+    }
+  }, [generatePassphrase]);
+
   // Listen for tray-triggered passphrase generation
   useEffect(() => {
     const handleTrayGeneration = () => {
@@ -100,7 +115,7 @@ export function PassphraseGenerator() {
     return () => {
       window.removeEventListener('tray-generate-passphrase', handleTrayGeneration);
     };
-  }, []);
+  }, [handleGenerate]);
 
   const handleCopy = async () => {
     if (currentPassphrase) {
@@ -140,21 +155,6 @@ export function PassphraseGenerator() {
         });
         setTimeout(() => setSaveMessage(''), 3000);
       }
-    }
-  };
-
-  const handleGenerate = async () => {
-    try {
-      await generatePassphrase();
-      toast.success('Passphrase generated successfully!');
-    } catch (error) {
-      toast.error('Failed to generate passphrase', {
-        description: error instanceof Error ? error.message : 'Generation failed',
-        action: {
-          label: 'Retry',
-          onClick: () => handleGenerate(),
-        },
-      });
     }
   };
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { generateHardwareId } from '@/lib/hardware-id';
+import { StorageKeyManager, initializeEnhancedStorage } from '@/lib/storage-enhanced';
 import type { 
   PasswordConfig, 
   PassphraseConfig, 
@@ -133,49 +134,47 @@ async function getUserStorageKey(): Promise<string> {
   }
   
   try {
-    const hardwareId = await generateHardwareId();
-    
-    // Check if we're in a secure context for crypto.subtle.digest
-    if (!isSecureContext()) {
-      // Log warning only in development
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Crypto.subtle not available (non-secure context). Using fallback key generation.');
-      }
-      
-      // Use a deterministic but collision-resistant approach without crypto.subtle
-      const encoder = new TextEncoder();
-      const data = encoder.encode(hardwareId);
-      
-      // Simple hash alternative using character codes
-      let hash = 0;
-      for (let i = 0; i < data.length; i++) {
-        const char = data[i];
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
-      }
-      
-      const shortKey = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
-      userStorageKey = `securegen-store-${shortKey}`;
-      return userStorageKey;
-    }
-    
-    // Create a shorter, more manageable key from the hardware ID using crypto.subtle
-    const keyHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hardwareId));
-    const keyArray = Array.from(new Uint8Array(keyHash));
-    const shortKey = keyArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    userStorageKey = `securegen-store-${shortKey}`;
-    return userStorageKey;
-  } catch {
+    // Use the enhanced storage key manager for normalized, stable key generation
+    const enhancedKey = await StorageKeyManager.generateStorageKey('primary');
+    userStorageKey = enhancedKey;
+    return enhancedKey;
+  } catch (error) {
     // Enhanced error handling with development-only logging
     if (process.env.NODE_ENV === 'development') {
-      console.warn('Failed to generate user-specific storage key, using collision-resistant fallback');
+      console.warn('Enhanced storage key generation failed, using legacy fallback:', error);
     }
     
-    // Use collision-resistant fallback instead of simple timestamp
-    const fallbackKey = generateCollisionResistantFallback();
-    userStorageKey = fallbackKey;
-    return fallbackKey;
+    // Fallback to legacy key generation for compatibility
+    try {
+      const hardwareId = await generateHardwareId();
+      
+      if (!isSecureContext()) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(hardwareId);
+        
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+          const char = data[i];
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash;
+        }
+        
+        const shortKey = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
+        userStorageKey = `securegen-store-${shortKey}`;
+        return userStorageKey;
+      }
+      
+      const keyHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hardwareId));
+      const keyArray = Array.from(new Uint8Array(keyHash));
+      const shortKey = keyArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      userStorageKey = `securegen-store-${shortKey}`;
+      return userStorageKey;
+    } catch {
+      const fallbackKey = generateCollisionResistantFallback();
+      userStorageKey = fallbackKey;
+      return fallbackKey;
+    }
   }
 }
 
@@ -455,6 +454,9 @@ export const useAppStore = create<AppStore>()(
 
 // Initialize the store with user-specific storage on first load
 if (typeof window !== 'undefined') {
+  // Initialize enhanced storage system
+  initializeEnhancedStorage();
+  
   // Initialize user storage when the module loads
   useAppStore.getState().initializeUserStorage().catch((error) => {
     // Enhanced error handling for module initialization

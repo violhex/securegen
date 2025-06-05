@@ -10,11 +10,6 @@ interface StorageProviderProps {
 
 export function StorageProvider({ children }: StorageProviderProps) {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [migrationStatus, setMigrationStatus] = useState<{
-    migrated: boolean;
-    legacyCleared: boolean;
-    oldStorageCleaned: number;
-  } | null>(null);
 
   useEffect(() => {
     const initializeStorage = async () => {
@@ -32,7 +27,6 @@ export function StorageProvider({ children }: StorageProviderProps) {
           });
           
           const result = await performStorageMigration();
-          setMigrationStatus(result);
           
           if (result.migrated) {
             toast.success('Data migration completed successfully!', {

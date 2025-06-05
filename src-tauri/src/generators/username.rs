@@ -2,7 +2,39 @@ use crate::generators::wordlist::EFF_LONG_WORD_LIST;
 use crate::generators::username_forwarders;
 use rand::{distributions::Distribution, seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::LazyLock;
 use thiserror::Error;
+
+/// Static cache of filtered word lists for each UsernameStrength variant.
+/// This is computed once at program start and reused for all subsequent calls.
+static FILTERED_WORD_CACHE: LazyLock<HashMap<UsernameStrength, Vec<&'static str>>> = LazyLock::new(|| {
+    let mut cache = HashMap::new();
+    
+    // Precompute filtered word lists for each strength level
+    for &strength in &[
+        UsernameStrength::Basic,
+        UsernameStrength::Standard,
+        UsernameStrength::Strong,
+        UsernameStrength::Maximum,
+    ] {
+        let min_len = strength.min_length();
+        let max_len = strength.max_length();
+        
+        let filtered_words: Vec<&'static str> = EFF_LONG_WORD_LIST
+            .iter()
+            .filter(|word| {
+                let len = word.len();
+                len >= min_len && len <= max_len
+            })
+            .copied()
+            .collect();
+        
+        cache.insert(strength, filtered_words);
+    }
+    
+    cache
+});
 
 #[derive(Debug, Error)]
 pub enum UsernameError {
@@ -29,7 +61,7 @@ pub enum UsernameError {
 }
 
 /// Username strength levels for word-based generation
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum UsernameStrength {
     /// Basic words (3-4 characters, common words)
@@ -63,19 +95,11 @@ impl UsernameStrength {
         }
     }
 
-    /// Get words that match this strength level
-    fn filter_words(&self) -> Vec<&'static str> {
-        let min_len = self.min_length();
-        let max_len = self.max_length();
-        
-        EFF_LONG_WORD_LIST
-            .iter()
-            .filter(|word| {
-                let len = word.len();
-                len >= min_len && len <= max_len
-            })
-            .copied()
-            .collect()
+    /// Get words that match this strength level from the precomputed cache
+    fn filter_words(&self) -> &'static Vec<&'static str> {
+        FILTERED_WORD_CACHE
+            .get(self)
+            .expect("All UsernameStrength variants should be precomputed in cache")
     }
 }
 
@@ -329,7 +353,7 @@ fn username_word(mut rng: impl Rng, capitalize: bool, include_number: bool, stre
     let word_list = if filtered_words.is_empty() {
         EFF_LONG_WORD_LIST
     } else {
-        &filtered_words
+        filtered_words.as_slice()
     };
     
     let word = word_list

@@ -154,12 +154,13 @@ export function UsernameGenerator() {
   };
 
   const getStrengthLabel = (score: number) => {
-    // Username security labels are more focused on privacy and uniqueness
-    if (score < 30) return { label: 'Poor', color: 'text-destructive bg-destructive/10', icon: AlertCircle };
-    if (score < 50) return { label: 'Fair', color: 'text-orange-600 bg-orange-100', icon: AlertCircle };
-    if (score < 70) return { label: 'Good', color: 'text-blue-600 bg-blue-100', icon: CheckCircle };
-    if (score < 85) return { label: 'Excellent', color: 'text-green-600 bg-green-100', icon: CheckCircle };
-    return { label: 'Perfect', color: 'text-green-700 bg-green-200', icon: CheckCircle };
+    // Match exact backend scoring ranges from evaluate_username_security() in main.rs
+    // Backend uses: 0..=25, 26..=45, 46..=65, 66..=80, 81..=100
+    if (score >= 0 && score <= 25) return { label: 'Very Poor', color: 'text-red-600 bg-red-100', icon: AlertCircle };
+    if (score >= 26 && score <= 45) return { label: 'Poor', color: 'text-orange-600 bg-orange-100', icon: AlertCircle };
+    if (score >= 46 && score <= 65) return { label: 'Fair', color: 'text-yellow-600 bg-yellow-100', icon: AlertCircle };
+    if (score >= 66 && score <= 80) return { label: 'Good', color: 'text-blue-600 bg-blue-100', icon: CheckCircle };
+    return { label: 'Excellent', color: 'text-green-600 bg-green-100', icon: CheckCircle };
   };
 
   const strengthInfo = getStrengthLabel(strength);
@@ -652,11 +653,11 @@ export function UsernameGenerator() {
                       <div
                         className="h-full rounded-full transition-all duration-500 ease-out bg-gradient-to-r from-current to-current opacity-90"
                         style={{ 
-                          width: `${strength}%`,
-                          backgroundColor: strength < 30 ? '#ef4444' : 
-                                         strength < 50 ? '#f97316' : 
-                                         strength < 70 ? '#3b82f6' : 
-                                         strength < 85 ? '#10b981' : '#059669'
+                          width: `${strength}%`, // Username scores are already 0-100 scale
+                          backgroundColor: strength < 25 ? '#ef4444' : 
+                                         strength < 45 ? '#f97316' : 
+                                         strength < 65 ? '#f59e0b' : 
+                                         strength < 80 ? '#3b82f6' : '#10b981'
                         }}
                       />
                     </div>

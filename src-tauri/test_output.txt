@@ -1,0 +1,13 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.87s
+     Running unittests src\main.rs (target\debug\deps\app-11c9335a9b49908c.exe)
+
+running 6 tests
+test tests::test_username_strength_skype ... ok
+test tests::test_username_strength_eff_words ... ok
+test tests::test_username_strength_unnerving1234 ... ok
+test generators::username::tests::test_username_strength_levels ... ok
+test tests::test_username_strength_good_username ... ok
+test tests::test_username_strength_generated_patterns ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 88 filtered out; finished in 0.00s
+

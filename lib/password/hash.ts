@@ -1,40 +1,90 @@
-import type { HashPurpose, KdfConfig } from './types';
+import type { HashPurpose, KdfConfig, PasswordHashResult } from './types';
+import { getRecommendedIterations } from './config';
 
 /**
- * Determine password hash using KDF and purpose.
- * Following Bitwarden's implementation pattern.
+ * Generate a cryptographically secure random salt.
+ */
+function generateSecureSalt(): string {
+  const saltBytes = new Uint8Array(32); // 256-bit salt
+  crypto.getRandomValues(saltBytes);
+  return btoa(String.fromCharCode(...saltBytes));
+}
+
+/**
+ * Determine password hash using KDF and purpose with secure random salt.
+ * Following Bitwarden's implementation pattern with enhanced security.
  * 
- * Note: This is a simplified implementation. In production, you would use
- * proper cryptographic libraries like Web Crypto API or Node.js crypto.
+ * @param email - User email (for backward compatibility, not used in salt generation)
+ * @param kdf - Key derivation function configuration
+ * @param password - User password
+ * @param purpose - Hash purpose (local or server authorization)
+ * @param existingSalt - Optional existing salt for verification (if not provided, generates new one)
+ * @returns Promise resolving to hash string or PasswordHashResult with hash and salt
  */
 export async function determinePasswordHash(
   email: string,
   kdf: KdfConfig,
   password: string,
-  purpose: HashPurpose
-): Promise<string> {
-  // Derive master key using KDF
-  const masterKey = await deriveMasterKey(password, email, kdf);
+  purpose: HashPurpose,
+  existingSalt?: string
+): Promise<string>;
+export async function determinePasswordHash(
+  email: string,
+  kdf: KdfConfig,
+  password: string,
+  purpose: HashPurpose,
+  existingSalt: undefined,
+  returnSalt: true
+): Promise<PasswordHashResult>;
+export async function determinePasswordHash(
+  email: string,
+  kdf: KdfConfig,
+  password: string,
+  purpose: HashPurpose,
+  existingSalt?: string,
+  returnSalt?: boolean
+): Promise<string | PasswordHashResult> {
+  // Use existing salt for verification, or generate new secure salt
+  const salt = existingSalt || generateSecureSalt();
+  
+  // Derive master key using KDF with secure salt
+  const masterKey = await deriveMasterKey(password, salt, kdf);
   
   // Derive hash for the specific purpose
-  return deriveMasterKeyHash(masterKey, password, purpose);
+  const hash = await deriveMasterKeyHash(masterKey, password, purpose);
+  
+  // Return hash and salt for storage, or just hash for verification
+  if (returnSalt || !existingSalt) {
+    const iterations = kdf.iterations || getRecommendedIterations(kdf.type);
+    return { 
+      hash, 
+      salt,
+      iterations,
+      kdfType: kdf.type,
+      createdAt: Date.now()
+    };
+  }
+  
+  return hash;
 }
 
 /**
- * Derive master key from password using KDF.
- * Simplified implementation - in production use proper crypto libraries.
+ * Derive master key from password using KDF with secure salt.
+ * Enhanced implementation using cryptographically secure salt.
  */
 async function deriveMasterKey(
   password: string,
-  email: string,
+  salt: string,
   kdf: KdfConfig
 ): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const passwordBytes = encoder.encode(password);
-  const saltBytes = encoder.encode(email.toLowerCase());
+  // Decode the base64 salt back to bytes
+  const saltBytes = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
 
   if (kdf.type === 'PBKDF2') {
-    const iterations = kdf.iterations || 100000;
+    // Use configured iterations or fall back to 2024 OWASP recommended minimum (600,000)
+    const iterations = kdf.iterations || getRecommendedIterations('PBKDF2');
     
     // Import password as key material
     const keyMaterial = await crypto.subtle.importKey(

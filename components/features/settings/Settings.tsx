@@ -27,7 +27,6 @@ import { Separator } from '@/components/ui/separator';
 import { getSystemInformation } from '@/lib/hardware-id';
 import { tauri, isTauriEnvironment } from '@/types/tauri';
 import { 
-  getAllSecureGenStorageKeys, 
   hasLegacyStorage, 
   clearLegacyStorage,
   cleanupOldStorage,
@@ -124,7 +123,7 @@ export function Settings() {
     };
 
     initializeSystemInfo();
-  }, []);
+  }, [history.length, userStorageKey]);
 
   const handleCopy = async (text: string, type: string) => {
     try {
@@ -479,7 +478,9 @@ export function Settings() {
                   </Label>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 p-2 rounded bg-muted/50 border border-border font-mono text-xs">
-                      {storageInfo.currentUserKey.substring(0, 20)}...
+                      {storageInfo.currentUserKey.length > 20 
+                        ? `${storageInfo.currentUserKey.substring(0, 20)}...` 
+                        : storageInfo.currentUserKey}
                     </div>
                     <Button
                       variant="ghost"

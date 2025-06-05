@@ -314,12 +314,55 @@ export class TauriAPI {
     return fileName;
   }
 
+  /**
+   * Masks an IP address for privacy protection.
+   * Supports both IPv4 and IPv6 formats.
+   * 
+   * @param ip - The IP address to mask
+   * @returns Masked IP address or "Not available" if format is unrecognized
+   */
+  private static maskIp(ip: string): string {
+    if (!ip || ip === 'Not available') {
+      return 'Not available';
+    }
+
+    // IPv4 detection and masking (contains dots)
+    if (ip.includes('.')) {
+      const parts = ip.split('.');
+      if (parts.length === 4) {
+        // Mask the last octet for IPv4
+        return `${parts[0]}.${parts[1]}.${parts[2]}.xxx`;
+      }
+    }
+    
+    // IPv6 detection and masking (contains colons)
+    if (ip.includes(':')) {
+      const parts = ip.split(':');
+      if (parts.length >= 3) {
+        // For IPv6, mask the last 4 groups (64 bits) for privacy
+        // Keep the first 4 groups (64 bits) which typically represent the network prefix
+        const visibleGroups = Math.min(4, parts.length - 4);
+        const maskedParts = parts.slice(0, visibleGroups);
+        
+        // Add masked groups
+        const maskedSuffix = 'xxxx:xxxx:xxxx:xxxx';
+        return `${maskedParts.join(':')}:${maskedSuffix}`;
+      }
+    }
+    
+    // If format is not recognized, return "Not available"
+    return 'Not available';
+  }
+
   static async getPublicIPAddress(): Promise<string> {
     try {
       // Use the new Tauri backend command for better security and reliability
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && (window as { __TAURI__?: unknown }).__TAURI__) {
         const response = await invoke('get_public_ip_address') as IPResponse;
-        return response.masked_ip || 'Not available';
+        const ip = response.ip || response.masked_ip || 'Not available';
+        
+        // Apply consistent masking to backend response
+        return this.maskIp(ip);
       }
       
       // Fallback for development environment
@@ -339,10 +382,9 @@ export class TauriAPI {
         
         const data = await response.json();
         const ip = data.origin || 'Not available';
-        const parts = ip.split('.');
-        return parts.length === 4 
-          ? `${parts[0]}.${parts[1]}.${parts[2]}.xxx` 
-          : 'Not available';
+        
+        // Apply consistent masking to fallback response
+        return this.maskIp(ip);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -430,12 +472,12 @@ export class TauriAPI {
     // Normalize to 0-100 scale first, then map to 0-4 scale
     const normalizedScore = Math.max(0, Math.min(100, score));
     
-    // Map 0-100 to 0-4 scale to match backend/zxcvbn
+    // Map 0-100 to 0-4 scale to match backend/zxcvbn-ts
     return Math.floor(normalizedScore / 25);
   }
 
   private static getStrengthDescription(score: number): string {
-    // Score is now on 0-4 scale to match backend/zxcvbn
+    // Score is now on 0-4 scale to match backend/zxcvbn-ts
     if (score < 1) return 'Very weak - could be cracked instantly';
     if (score < 2) return 'Weak - could be cracked in minutes';
     if (score < 3) return 'Good - could take days to crack';
@@ -505,27 +547,35 @@ export class TauriAPI {
       feedback.push('Contains special characters');
     }
     
+    // Normalize to 0-100 scale and keep it on that scale to match backend
     const finalScore = Math.min(100, Math.max(0, score));
     
     let security_level: string;
-    if (finalScore < 30) {
-      security_level = 'Poor - Easily Guessable';
+    // Use exact backend scoring ranges from evaluate_username_security() in main.rs
+    if (finalScore >= 0 && finalScore <= 25) {
+      security_level = 'Very Poor - High Risk';
       feedback.push('Consider using a more unique username');
-    } else if (finalScore < 60) {
-      security_level = 'Fair - Some Privacy Concerns';
+    } else if (finalScore >= 26 && finalScore <= 45) {
+      security_level = 'Poor - Easily Guessable';
       feedback.push('Username security could be improved');
-    } else if (finalScore < 80) {
+    } else if (finalScore >= 46 && finalScore <= 65) {
+      security_level = 'Fair - Some Privacy Concerns';
+    } else if (finalScore >= 66 && finalScore <= 80) {
       security_level = 'Good - Reasonably Secure';
     } else {
       security_level = 'Excellent - Highly Secure';
     }
     
+    // Calculate privacy and uniqueness scores on 0-100 scale to match backend
+    const privacy_score = Math.floor(finalScore * 0.6);
+    const uniqueness_score = Math.floor(finalScore * 0.4);
+    
     return {
       score: finalScore,
       security_level,
       feedback,
-      privacy_score: Math.floor(finalScore * 0.6),
-      uniqueness_score: Math.floor(finalScore * 0.4),
+      privacy_score,
+      uniqueness_score,
     };
   }
 } 

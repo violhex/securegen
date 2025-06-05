@@ -26,7 +26,7 @@ export function ThemeToggle() {
             ? 'neuro-button-active bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-md border border-white/20'
             : 'card-flat text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
         )}
-        aria-pressed={isNeumorphismEnabled}
+        aria-checked={isNeumorphismEnabled}
         aria-label={`${isNeumorphismEnabled ? 'Disable' : 'Enable'} neumorphism theme`}
         role="switch"
       >
@@ -72,10 +72,10 @@ export function ThemeToggle() {
               animate={{ opacity: 0.6, scale: 1.2 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ 
-                duration: 0.3,
+                duration: 1.8,
                 repeat: Infinity,
                 repeatType: "reverse",
-                ease: "easeInOut"
+                ease: [0.4, 0, 0.6, 1]
               }}
               className="absolute inset-0 bg-white/30 rounded-lg blur-sm pointer-events-none"
             />

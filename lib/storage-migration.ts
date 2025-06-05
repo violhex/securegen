@@ -6,10 +6,10 @@
 import { generateHardwareId } from '@/lib/hardware-id';
 
 export interface LegacyStoreData {
-  passwordConfig?: any;
-  passphraseConfig?: any;
-  usernameConfig?: any;
-  history?: any[];
+  passwordConfig?: Record<string, unknown>;
+  passphraseConfig?: Record<string, unknown>;
+  usernameConfig?: Record<string, unknown>;
+  history?: Record<string, unknown>[];
   activeTab?: string;
 }
 

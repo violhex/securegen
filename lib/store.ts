@@ -52,8 +52,80 @@ function generateUUID(): string {
   });
 }
 
+// Storage mutex implementation to prevent race conditions
+class StorageMutex {
+  private queue: Array<() => void> = [];
+  private locked = false;
+
+  async acquire(): Promise<() => void> {
+    return new Promise((resolve) => {
+      const release = () => {
+        this.locked = false;
+        const next = this.queue.shift();
+        if (next) {
+          this.locked = true;
+          next();
+        }
+      };
+
+      if (!this.locked) {
+        this.locked = true;
+        resolve(release);
+      } else {
+        this.queue.push(() => resolve(release));
+      }
+    });
+  }
+}
+
+// Global storage mutex instance
+const storageMutex = new StorageMutex();
+
 // Generate user-specific storage key based on hardware ID
 let userStorageKey: string | null = null;
+
+/**
+ * Check if we're in a secure context (HTTPS or localhost)
+ */
+function isSecureContext(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  // Check if crypto.subtle is available (requires secure context)
+  return typeof crypto !== 'undefined' && 
+         typeof crypto.subtle !== 'undefined' && 
+         typeof crypto.subtle.digest === 'function';
+}
+
+/**
+ * Generate a collision-resistant fallback key using UUID and random components
+ */
+function generateCollisionResistantFallback(): string {
+  try {
+    // Use crypto.getRandomValues if available for better entropy
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const randomBytes = new Uint8Array(8);
+      crypto.getRandomValues(randomBytes);
+      const randomHex = Array.from(randomBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
+      // Combine with timestamp for additional uniqueness
+      const timestamp = Date.now().toString(16);
+      return `securegen-store-${randomHex}-${timestamp}`;
+    }
+    
+    // Fallback to Math.random with multiple components for collision resistance
+    const random1 = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0');
+    const random2 = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0');
+    const timestamp = Date.now().toString(16);
+    
+    return `securegen-store-${random1}-${random2}-${timestamp}`;
+  } catch {
+    // Ultimate fallback with UUID-like structure
+    const uuid = generateUUID();
+    return `securegen-store-${uuid}`;
+  }
+}
 
 async function getUserStorageKey(): Promise<string> {
   if (userStorageKey) {
@@ -62,17 +134,46 @@ async function getUserStorageKey(): Promise<string> {
   
   try {
     const hardwareId = await generateHardwareId();
-    // Create a shorter, more manageable key from the hardware ID
+    
+    // Check if we're in a secure context for crypto.subtle.digest
+    if (!isSecureContext()) {
+      // Log warning only in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Crypto.subtle not available (non-secure context). Using fallback key generation.');
+      }
+      
+      // Use a deterministic but collision-resistant approach without crypto.subtle
+      const encoder = new TextEncoder();
+      const data = encoder.encode(hardwareId);
+      
+      // Simple hash alternative using character codes
+      let hash = 0;
+      for (let i = 0; i < data.length; i++) {
+        const char = data[i];
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      
+      const shortKey = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
+      userStorageKey = `securegen-store-${shortKey}`;
+      return userStorageKey;
+    }
+    
+    // Create a shorter, more manageable key from the hardware ID using crypto.subtle
     const keyHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hardwareId));
     const keyArray = Array.from(new Uint8Array(keyHash));
     const shortKey = keyArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
     
     userStorageKey = `securegen-store-${shortKey}`;
     return userStorageKey;
-  } catch (error) {
-    console.warn('Failed to generate user-specific storage key, using fallback:', error);
-    // Fallback to a timestamp-based key to ensure uniqueness
-    const fallbackKey = `securegen-store-${Date.now().toString(16)}`;
+  } catch {
+    // Enhanced error handling with development-only logging
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Failed to generate user-specific storage key, using collision-resistant fallback');
+    }
+    
+    // Use collision-resistant fallback instead of simple timestamp
+    const fallbackKey = generateCollisionResistantFallback();
     userStorageKey = fallbackKey;
     return fallbackKey;
   }
@@ -124,7 +225,7 @@ interface AppStore {
 // Create the store with dynamic storage key
 export const useAppStore = create<AppStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Initial configurations
       passwordConfig: {
         length: 16,
@@ -214,14 +315,31 @@ export const useAppStore = create<AppStore>()(
       
       // Initialize user-specific storage
       initializeUserStorage: async () => {
+        const release = await storageMutex.acquire();
         try {
           const storageKey = await getUserStorageKey();
           set({ userStorageKey: storageKey });
-          
-          // Log for debugging (remove in production)
-          console.log(`Initialized user-specific storage with key: ${storageKey}`);
         } catch (error) {
-          console.error('Failed to initialize user-specific storage:', error);
+          // Enhanced error handling with categorization
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          const errorType = error instanceof Error ? error.name : 'UnknownError';
+          
+          // Log structured error information without exposing sensitive data
+          console.error('Storage initialization failed:', {
+            type: errorType,
+            message: errorMessage,
+            timestamp: new Date().toISOString(),
+            context: 'user-storage-initialization'
+          });
+          
+          // Set a fallback storage key to prevent complete failure
+          const fallbackKey = `securegen-fallback-${Date.now()}`;
+          set({ userStorageKey: fallbackKey });
+          
+          // Re-throw with enhanced context for upstream handling
+          throw new Error(`Storage initialization failed: ${errorMessage}`, { cause: error });
+        } finally {
+          release();
         }
       },
     }),
@@ -236,9 +354,10 @@ export const useAppStore = create<AppStore>()(
         isNeumorphismEnabled: state.isNeumorphismEnabled,
         userStorageKey: state.userStorageKey,
       }),
-      // Custom storage implementation to handle dynamic keys
+      // Custom storage implementation to handle dynamic keys with mutex protection
       storage: {
-        getItem: async (name: string) => {
+        getItem: async () => {
+          const release = await storageMutex.acquire();
           try {
             // Check if we're in a browser environment
             if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -249,11 +368,26 @@ export const useAppStore = create<AppStore>()(
             const item = localStorage.getItem(key);
             return item ? JSON.parse(item) : null;
           } catch (error) {
-            console.error('Failed to get item from storage:', error);
+            // Enhanced error handling for storage retrieval
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const errorType = error instanceof Error ? error.name : 'UnknownError';
+            
+            console.error('Storage retrieval failed:', {
+              type: errorType,
+              message: errorMessage,
+              operation: 'getItem',
+              timestamp: new Date().toISOString(),
+              context: 'persistent-storage'
+            });
+            
+            // Return null to allow graceful degradation
             return null;
+          } finally {
+            release();
           }
         },
-        setItem: async (name: string, value: any) => {
+        setItem: async (_name: string, value: unknown) => {
+          const release = await storageMutex.acquire();
           try {
             // Check if we're in a browser environment
             if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -263,10 +397,30 @@ export const useAppStore = create<AppStore>()(
             const key = userStorageKey || await getUserStorageKey();
             localStorage.setItem(key, JSON.stringify(value));
           } catch (error) {
-            console.error('Failed to set item in storage:', error);
+            // Enhanced error handling for storage persistence
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const errorType = error instanceof Error ? error.name : 'UnknownError';
+            
+            console.error('Storage persistence failed:', {
+              type: errorType,
+              message: errorMessage,
+              operation: 'setItem',
+              timestamp: new Date().toISOString(),
+              context: 'persistent-storage',
+              // Check if it's a quota exceeded error
+              isQuotaError: errorType === 'QuotaExceededError' || errorMessage.includes('quota')
+            });
+            
+            // For quota errors, we might want to clear old data or notify the user
+            if (errorType === 'QuotaExceededError' || errorMessage.includes('quota')) {
+              console.warn('Storage quota exceeded. Consider clearing old data.');
+            }
+          } finally {
+            release();
           }
         },
-        removeItem: async (name: string) => {
+        removeItem: async () => {
+          const release = await storageMutex.acquire();
           try {
             // Check if we're in a browser environment
             if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -276,7 +430,22 @@ export const useAppStore = create<AppStore>()(
             const key = userStorageKey || await getUserStorageKey();
             localStorage.removeItem(key);
           } catch (error) {
-            console.error('Failed to remove item from storage:', error);
+            // Enhanced error handling for storage removal
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const errorType = error instanceof Error ? error.name : 'UnknownError';
+            
+            console.error('Storage removal failed:', {
+              type: errorType,
+              message: errorMessage,
+              operation: 'removeItem',
+              timestamp: new Date().toISOString(),
+              context: 'persistent-storage'
+            });
+            
+            // For removal operations, we might want to continue despite errors
+            // as the goal is to clean up data anyway
+          } finally {
+            release();
           }
         },
       },
@@ -287,5 +456,20 @@ export const useAppStore = create<AppStore>()(
 // Initialize the store with user-specific storage on first load
 if (typeof window !== 'undefined') {
   // Initialize user storage when the module loads
-  useAppStore.getState().initializeUserStorage().catch(console.error);
+  useAppStore.getState().initializeUserStorage().catch((error) => {
+    // Enhanced error handling for module initialization
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorType = error instanceof Error ? error.name : 'UnknownError';
+    
+    console.error('Module initialization failed:', {
+      type: errorType,
+      message: errorMessage,
+      timestamp: new Date().toISOString(),
+      context: 'module-initialization',
+      severity: 'critical'
+    });
+    
+    // In production, you might want to report this to an error tracking service
+    // or show a user-friendly error message
+  });
 } 

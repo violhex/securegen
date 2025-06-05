@@ -65,11 +65,11 @@ const mockScreen = {
 
 // Setup global mocks
 beforeAll(() => {
-  (global as any).localStorage = mockLocalStorage;
-  (global as any).crypto = mockCrypto;
-  (global as any).navigator = mockNavigator;
-  (global as any).screen = mockScreen;
-  (global as any).window = { 
+  (global as unknown as { localStorage: typeof mockLocalStorage }).localStorage = mockLocalStorage;
+  (global as unknown as { crypto: typeof mockCrypto }).crypto = mockCrypto;
+  (global as unknown as { navigator: typeof mockNavigator }).navigator = mockNavigator;
+  (global as unknown as { screen: typeof mockScreen }).screen = mockScreen;
+  (global as unknown as { window: { localStorage: typeof mockLocalStorage; navigator: typeof mockNavigator; screen: typeof mockScreen } }).window = { 
     localStorage: mockLocalStorage,
     navigator: mockNavigator,
     screen: mockScreen,
@@ -113,8 +113,8 @@ describe('StorageKeyManager', () => {
 
   test('should handle crypto.subtle unavailable', async () => {
     // Temporarily disable crypto.subtle
-    const originalCrypto = (global as any).crypto;
-    (global as any).crypto = undefined;
+    const originalCrypto = (global as unknown as { crypto: typeof mockCrypto }).crypto;
+    (global as unknown as { crypto: undefined }).crypto = undefined;
     
     StorageKeyManager.clearCache();
     
@@ -122,7 +122,7 @@ describe('StorageKeyManager', () => {
     expect(key).toMatch(/^securegen-fallback-v2-/);
     
     // Restore crypto
-    (global as any).crypto = originalCrypto;
+    (global as unknown as { crypto: typeof mockCrypto }).crypto = originalCrypto;
   });
 });
 
@@ -194,7 +194,12 @@ describe('StorageIntegrityManager', () => {
       // Missing required fields
     };
     
-    const success = await StorageIntegrityManager.importUserData(invalidData as any);
+    const success = await StorageIntegrityManager.importUserData(invalidData as {
+      version: number;
+      exportedAt: number;
+      hardwareId: string;
+      data: Record<string, unknown>;
+    });
     expect(success).toBe(false);
   });
 
@@ -262,7 +267,7 @@ describe('Integration Tests', () => {
     
     // Simulate hardware change by clearing cache and changing navigator
     StorageKeyManager.clearCache();
-    (global as any).navigator = { ...mockNavigator, platform: 'Linux x86_64' };
+    (global as unknown as { navigator: typeof mockNavigator }).navigator = { ...mockNavigator, platform: 'Linux x86_64' };
     
     // Generate new key (would be different due to platform change)
     const newKey = await StorageKeyManager.generateStorageKey('primary');
@@ -273,7 +278,7 @@ describe('Integration Tests', () => {
     expect(result.cleanedEntries).toBeGreaterThanOrEqual(0);
     
     // Restore original navigator
-    (global as any).navigator = mockNavigator;
+    (global as unknown as { navigator: typeof mockNavigator }).navigator = mockNavigator;
   });
 });
 

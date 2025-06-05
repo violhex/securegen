@@ -19,8 +19,6 @@ import {
   Trash2,
   Download,
   Upload,
-  FileDown,
-  FileUp,
   RefreshCw,
   Wrench
 } from 'lucide-react';
@@ -70,7 +68,12 @@ export function Settings() {
     isExporting: false,
     isImporting: false,
     lastIntegrityCheck: null as Date | null,
-    integrityResult: null as any,
+    integrityResult: null as {
+      valid: boolean;
+      issues: string[];
+      cleanedEntries: number;
+      migratedEntries: number;
+    } | null,
   });
 
   const { history, clearHistory, userStorageKey } = useAppStore();
@@ -347,7 +350,8 @@ export function Settings() {
               description: 'The backup file may be corrupted or incompatible',
             });
           }
-        } catch (parseError) {
+        } catch (parseError: unknown) {
+          console.error('Failed to parse backup file:', parseError);
           toast.error('Invalid backup file', {
             description: 'The selected file is not a valid SecureGen backup',
           });

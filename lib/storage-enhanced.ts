@@ -90,9 +90,9 @@ export class StorageKeyManager {
     let architecture: string | undefined;
     let osFamily: string | undefined;
 
-    if (typeof window !== 'undefined' && (window as any).__TAURI__?.os) {
+    if (typeof window !== 'undefined' && (window as unknown as { __TAURI__?: { os?: unknown } }).__TAURI__?.os) {
       try {
-        const tauriOs = (window as any).__TAURI__.os;
+        const tauriOs = (window as unknown as { __TAURI__: { os: { platform(): Promise<string>; arch(): Promise<string>; family?(): Promise<string>; type?(): Promise<string> } } }).__TAURI__.os;
         const [platformResult, archResult, familyResult] = await Promise.allSettled([
           tauriOs.platform(),
           tauriOs.arch(),
@@ -260,13 +260,13 @@ export class StorageIntegrityManager {
       for (const entry of allEntries) {
         try {
           JSON.parse(entry.value);
-        } catch (error) {
+        } catch {
           issues.push(`Corrupted data in ${entry.key}`);
           try {
             localStorage.removeItem(entry.key);
             cleanedEntries++;
-          } catch (removeError) {
-            issues.push(`Failed to remove corrupted entry ${entry.key}`);
+          } catch (removeError: unknown) {
+            issues.push(`Failed to remove corrupted entry ${entry.key}: ${removeError instanceof Error ? removeError.message : 'Unknown error'}`);
           }
         }
       }
@@ -378,7 +378,7 @@ export class StorageIntegrityManager {
     version: number;
     exportedAt: number;
     hardwareId: string;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
   }> {
     try {
       const currentKey = await StorageKeyManager.generateStorageKey('primary');
@@ -409,7 +409,7 @@ export class StorageIntegrityManager {
     version: number;
     exportedAt: number;
     hardwareId: string;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
   }): Promise<boolean> {
     try {
       // Validate export data
@@ -473,8 +473,12 @@ export class StorageRecoveryManager {
       )[0];
 
       // Copy data to current key
+      const dataToRecover = typeof mostRecent.data === 'object' && mostRecent.data !== null 
+        ? mostRecent.data as Record<string, unknown>
+        : {};
+      
       localStorage.setItem(currentKey, JSON.stringify({
-        ...mostRecent.data,
+        ...dataToRecover,
         recoveredAt: Date.now(),
         recoveredFrom: mostRecent.key,
       }));
@@ -495,12 +499,12 @@ export class StorageRecoveryManager {
    */
   private static findPotentialUserEntries(): Array<{
     key: string;
-    data: any;
+    data: unknown;
     lastModified?: number;
   }> {
     const entries: Array<{
       key: string;
-      data: any;
+      data: unknown;
       lastModified?: number;
     }> = [];
 

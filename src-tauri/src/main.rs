@@ -210,7 +210,7 @@ fn get_active_network_interface_ip() -> Result<String, String> {
                 let ip = interface.ip();
                 
                 // Skip loopback and inactive interfaces
-                if interface.is_loopback() {
+                if interface.is_loopback {
                     continue;
                 }
                 

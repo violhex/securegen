@@ -323,7 +323,11 @@ export function Settings() {
       input.accept = '.json';
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
+        if (!file) {
+          // Reset flag if no file selected
+          setStorageOperations(prev => ({ ...prev, isImporting: false }));
+          return;
+        }
         
         try {
           const text = await file.text();
@@ -347,6 +351,9 @@ export function Settings() {
           toast.error('Invalid backup file', {
             description: 'The selected file is not a valid SecureGen backup',
           });
+        } finally {
+          // Reset flag after import completes (success or failure)
+          setStorageOperations(prev => ({ ...prev, isImporting: false }));
         }
       };
       input.click();
@@ -354,7 +361,7 @@ export function Settings() {
       toast.error('Failed to import data', {
         description: error instanceof Error ? error.message : 'Unknown error occurred',
       });
-    } finally {
+      // Reset flag on immediate error (before file selection)
       setStorageOperations(prev => ({ ...prev, isImporting: false }));
     }
   };

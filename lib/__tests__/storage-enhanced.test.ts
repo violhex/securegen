@@ -6,7 +6,7 @@
 import { StorageKeyManager, StorageIntegrityManager } from '../storage-enhanced';
 
 // Mock browser environment
-const mockLocalStorage = {
+const mockLocalStorage: Storage & { data: Record<string, string>; clear: jest.Mock } = {
   data: {} as Record<string, string>,
   getItem: jest.fn((key: string) => mockLocalStorage.data[key] || null),
   setItem: jest.fn((key: string, value: string) => {
@@ -16,7 +16,7 @@ const mockLocalStorage = {
     delete mockLocalStorage.data[key];
   }),
   key: jest.fn((index: number) => Object.keys(mockLocalStorage.data)[index] || null),
-  get length() {
+  get length(): number {
     return Object.keys(mockLocalStorage.data).length;
   },
   clear: jest.fn(() => {
@@ -82,6 +82,7 @@ beforeAll(() => {
 afterEach(() => {
   mockLocalStorage.clear();
   StorageKeyManager.clearCache();
+  jest.restoreAllMocks();
 });
 
 describe('StorageKeyManager', () => {

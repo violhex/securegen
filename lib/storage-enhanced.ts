@@ -69,11 +69,12 @@ export class StorageKeyManager {
    * Collect only stable system characteristics that are unlikely to change
    */
   private static async collectStableSystemInfo() {
-    const navigator = globalThis.navigator;
-    const screen = globalThis.screen;
+    // Safely access globalThis objects with proper guards for SSR environments
+    const navigator = typeof globalThis !== 'undefined' ? globalThis.navigator : undefined;
+    const screen = typeof globalThis !== 'undefined' ? globalThis.screen : undefined;
 
     // Extract base language (remove region/script variants)
-    const languageBase = navigator.language?.split('-')[0] || 'en';
+    const languageBase = navigator?.language?.split('-')[0] || 'en';
     
     // Normalize timezone to reduce drift from DST changes
     const rawTimezone = new Date().getTimezoneOffset();
@@ -85,7 +86,7 @@ export class StorageKeyManager {
       '1920x1080';
 
     // Try to get additional stable Tauri info
-    let platform = navigator.platform;
+    let platform = navigator?.platform || 'unknown';
     let architecture: string | undefined;
     let osFamily: string | undefined;
 
@@ -113,7 +114,7 @@ export class StorageKeyManager {
       languageBase,
       timezoneStable,
       screenStable,
-      hardwareConcurrency: navigator.hardwareConcurrency || 4,
+      hardwareConcurrency: navigator?.hardwareConcurrency || 4,
     };
   }
 
@@ -138,7 +139,25 @@ export class StorageKeyManager {
    */
   private static generateFallbackKey(purpose: string): string {
     const timestamp = Date.now().toString(16);
-    const random = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0');
+    
+    // Use cryptographically secure random number generator when available
+    let random: string;
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      // Generate cryptographically secure random bytes
+      const randomBytes = new Uint8Array(4); // 4 bytes = 32 bits
+      crypto.getRandomValues(randomBytes);
+      // Convert to hex string
+      random = Array.from(randomBytes)
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+    } else {
+      // SECURITY WARNING: Math.random() is NOT cryptographically secure and should only be used
+      // as a last resort when crypto.getRandomValues is unavailable. This fallback provides
+      // weaker entropy and may be predictable, reducing the security of the generated key.
+      // In production environments, ensure crypto.getRandomValues is available.
+      random = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0');
+    }
+    
     return `securegen-fallback-v${this.STORAGE_VERSION}-${purpose}-${timestamp}-${random}`;
   }
 

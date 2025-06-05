@@ -274,12 +274,12 @@ SecureGen follows strict security and code quality standards:
 ## 📄 License & Security
 
 ### Open Source
-This project is open source under [INSERT LICENSE]. Security researchers are welcome to audit the codebase.
+This project is open source under MIT. Security researchers are welcome to audit the codebase.
 
 ### Security Reporting
 For security vulnerabilities, please follow responsible disclosure:
 1. **Do not** create public issues for security bugs
-2. **Contact** security team directly via [INSERT CONTACT]
+2. **Contact** security team directly via Discord: @10000010011011100001110
 3. **Allow** 90 days for patching before disclosure
 
 ### Compliance

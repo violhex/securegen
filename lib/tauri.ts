@@ -469,18 +469,16 @@ export class TauriAPI {
     if (password.length < 8) score -= 20;
     if (password.length < 6) score -= 30;
     
-    // Normalize to 0-100 scale first, then map to 0-4 scale
-    const normalizedScore = Math.max(0, Math.min(100, score));
-    
-    // Map 0-100 to 0-4 scale to match backend/zxcvbn-ts
-    return Math.floor(normalizedScore / 25);
+    // Normalize to 0-100 scale to match consistent backend conversion
+    return Math.max(0, Math.min(100, score));
   }
 
   private static getStrengthDescription(score: number): string {
-    // Score is now on 0-4 scale to match backend/zxcvbn-ts
-    if (score < 1) return 'Very weak - could be cracked instantly';
-    if (score < 2) return 'Weak - could be cracked in minutes';
-    if (score < 3) return 'Good - could take days to crack';
+    // Score is now on consistent 0-100 scale
+    if (score < 25) return 'Very weak - could be cracked instantly';
+    if (score < 50) return 'Weak - could be cracked in minutes';
+    if (score < 75) return 'Fair - could be cracked in hours to days';
+    if (score < 100) return 'Good - could take months to crack';
     return 'Strong - would take years to crack';
   }
 

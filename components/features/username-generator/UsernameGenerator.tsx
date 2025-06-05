@@ -97,6 +97,19 @@ export function UsernameGenerator() {
     }
   }, [currentUsername]);
 
+  // Listen for tray-triggered username generation
+  useEffect(() => {
+    const handleTrayGeneration = () => {
+      handleGenerate();
+    };
+
+    window.addEventListener('tray-generate-username', handleTrayGeneration);
+    
+    return () => {
+      window.removeEventListener('tray-generate-username', handleTrayGeneration);
+    };
+  }, []);
+
   const handleCopy = async () => {
     if (currentUsername) {
       try {

@@ -103,6 +103,19 @@
   --color-sidebar-ring: oklch(1.00 0 0);
 }
 
+/* 
+ * Refined Shadow System - Subtle and Modern Approach
+ * 
+ * The shadow system has been carefully tuned to provide visual depth
+ * without overwhelming the interface. Key improvements:
+ * 
+ * - Reduced shadow blur and spread values for a more refined look
+ * - Lowered opacity values to create subtle depth rather than heavy shadows
+ * - Consistent scaling: minimal -> subtle -> elevated -> neuro
+ * - Maintained accessibility and WCAG contrast requirements
+ * - Optimized for both light and dark themes
+ */
+
 @utility card-flat {
   background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border));
@@ -113,7 +126,14 @@
 @utility card-elevated {
   background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow: 0 2px 4px -1px rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@utility card-elevated-hover {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 8px -2px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.08);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -121,8 +141,17 @@
   background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   box-shadow: 
-    2px 2px 4px hsl(var(--border)),
-    -1px -1px 2px hsl(var(--background));
+    1px 1px 2px hsl(var(--border) / 0.8),
+    -0.5px -0.5px 1px hsl(var(--background) / 0.9);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@utility neuro-minimal {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 
+    0.5px 0.5px 1px hsl(var(--border) / 0.6),
+    -0.25px -0.25px 0.5px hsl(var(--background) / 0.8);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -130,8 +159,8 @@
   background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   box-shadow: 
-    inset 2px 2px 4px hsl(var(--border)),
-    inset -1px -1px 2px hsl(var(--background));
+    inset 1px 1px 2px hsl(var(--border) / 0.6),
+    inset -0.5px -0.5px 1px hsl(var(--background) / 0.8);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -142,37 +171,35 @@
   -webkit-backdrop-filter: blur(8px);
 }
 
-
-
 @utility neuro-button-active {
   background: linear-gradient(145deg, oklch(0.11 0 0), oklch(0.15 0 0));
   border: 1px solid oklch(0.25 0 0 / 0.3);
   box-shadow: 
-    inset 4px 4px 8px oklch(0.05 0 0),
-    inset -4px -4px 8px oklch(0.17 0 0),
-    0 0 20px oklch(1.00 0 0 / 0.15);
+    inset 2px 2px 4px oklch(0.05 0 0),
+    inset -2px -2px 4px oklch(0.17 0 0),
+    0 0 12px oklch(1.00 0 0 / 0.1);
 }
 
 @utility neuro-icon-active {
   box-shadow: 
-    4px 4px 8px oklch(0.05 0 0),
-    -4px -4px 8px oklch(0.17 0 0),
-    0 0 15px oklch(1.00 0 0 / 0.2);
+    2px 2px 4px oklch(0.05 0 0),
+    -2px -2px 4px oklch(0.17 0 0),
+    0 0 8px oklch(1.00 0 0 / 0.15);
 }
 
 @utility frosted-glass {
   background: linear-gradient(135deg, 
-    oklch(0.11 0 0 / 0.8) 0%,
-    oklch(0.13 0 0 / 0.6) 50%,
-    oklch(0.09 0 0 / 0.8) 100%
+    oklch(0.11 0 0 / 0.85) 0%,
+    oklch(0.13 0 0 / 0.7) 50%,
+    oklch(0.09 0 0 / 0.85) 100%
   );
   border: 1px solid oklch(0.25 0 0 / 0.2);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   box-shadow: 
-    0 8px 32px oklch(0 0 0 / 0.3),
-    inset 0 1px 0 oklch(1.00 0 0 / 0.1),
-    inset 0 -1px 0 oklch(0 0 0 / 0.1);
+    0 4px 16px oklch(0 0 0 / 0.2),
+    inset 0 1px 0 oklch(1.00 0 0 / 0.08),
+    inset 0 -1px 0 oklch(0 0 0 / 0.08);
 }
 
 /* Neumorphism theme overrides */
@@ -180,8 +207,8 @@
   background: linear-gradient(145deg, oklch(0.13 0 0), oklch(0.09 0 0));
   border: 1px solid oklch(0.15 0 0);
   box-shadow: 
-    6px 6px 12px oklch(0.05 0 0),
-    -6px -6px 12px oklch(0.17 0 0);
+    3px 3px 6px oklch(0.05 0 0 / 0.8),
+    -3px -3px 6px oklch(0.17 0 0 / 0.6);
   color: oklch(1.00 0 0);
 }
 
@@ -189,18 +216,19 @@
   background: linear-gradient(145deg, oklch(0.13 0 0), oklch(0.09 0 0));
   border: 1px solid oklch(0.15 0 0);
   box-shadow: 
-    8px 8px 16px oklch(0.05 0 0),
-    -8px -8px 16px oklch(0.17 0 0),
-    inset 0 0 0 1px oklch(0.2 0 0 / 0.1);
+    4px 4px 8px oklch(0.05 0 0 / 0.8),
+    -4px -4px 8px oklch(0.17 0 0 / 0.6),
+    inset 0 0 0 1px oklch(0.2 0 0 / 0.08);
   color: oklch(1.00 0 0);
 }
 
 .neumorphism-theme .card-elevated:hover {
   box-shadow: 
-    12px 12px 24px oklch(0.03 0 0),
-    -12px -12px 24px oklch(0.19 0 0),
-    inset 0 0 0 1px oklch(0.3 0 0 / 0.2),
-    0 0 20px oklch(1.00 0 0 / 0.1);
+    6px 6px 12px oklch(0.03 0 0 / 0.9),
+    -6px -6px 12px oklch(0.19 0 0 / 0.7),
+    inset 0 0 0 1px oklch(0.3 0 0 / 0.12),
+    0 0 16px oklch(1.00 0 0 / 0.08);
+  transform: translateY(-0.5px);
 }
 
 .neumorphism-theme input,
@@ -210,17 +238,17 @@
   border: 1px solid oklch(0.25 0 0 / 0.3);
   color: oklch(1.00 0 0);
   box-shadow: 
-    inset 4px 4px 8px oklch(0.05 0 0),
-    inset -4px -4px 8px oklch(0.17 0 0);
+    inset 2px 2px 4px oklch(0.05 0 0 / 0.8),
+    inset -2px -2px 4px oklch(0.17 0 0 / 0.6);
 }
 
 .neumorphism-theme input:focus,
 .neumorphism-theme textarea:focus,
 .neumorphism-theme select:focus {
   box-shadow: 
-    inset 4px 4px 8px oklch(0.05 0 0),
-    inset -4px -4px 8px oklch(0.17 0 0),
-    0 0 20px oklch(1.00 0 0 / 0.15);
+    inset 2px 2px 4px oklch(0.05 0 0 / 0.8),
+    inset -2px -2px 4px oklch(0.17 0 0 / 0.6),
+    0 0 12px oklch(1.00 0 0 / 0.12);
   border-color: oklch(1.00 0 0 / 0.3);
 }
 
@@ -362,26 +390,26 @@
     background: linear-gradient(145deg, oklch(0.13 0 0), oklch(0.09 0 0));
     border: 1px solid oklch(0.15 0 0);
     box-shadow: 
-      8px 8px 16px oklch(0.05 0 0),
-      -8px -8px 16px oklch(0.17 0 0),
-      inset 0 0 0 1px oklch(0.2 0 0 / 0.1);
+      4px 4px 8px oklch(0.05 0 0 / 0.8),
+      -4px -4px 8px oklch(0.17 0 0 / 0.6),
+      inset 0 0 0 1px oklch(0.2 0 0 / 0.08);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .neuro-button:hover {
     box-shadow: 
-      12px 12px 24px oklch(0.03 0 0),
-      -12px -12px 24px oklch(0.19 0 0),
-      inset 0 0 0 1px oklch(0.3 0 0 / 0.2),
-      0 0 20px oklch(1.00 0 0 / 0.1);
-    transform: translateY(-1px);
+      6px 6px 12px oklch(0.03 0 0 / 0.9),
+      -6px -6px 12px oklch(0.19 0 0 / 0.7),
+      inset 0 0 0 1px oklch(0.3 0 0 / 0.12),
+      0 0 16px oklch(1.00 0 0 / 0.08);
+    transform: translateY(-0.5px);
   }
 
   .neuro-button:active {
     box-shadow: 
-      inset 4px 4px 8px oklch(0.05 0 0),
-      inset -4px -4px 8px oklch(0.17 0 0),
-      0 0 20px oklch(1.00 0 0 / 0.15);
+      inset 2px 2px 4px oklch(0.05 0 0 / 0.8),
+      inset -2px -2px 4px oklch(0.17 0 0 / 0.6),
+      0 0 12px oklch(1.00 0 0 / 0.12);
     transform: translateY(0);
   }
 
@@ -423,6 +451,65 @@
   }
   .strength-strong { 
     background-color: hsl(142 71% 45%); 
+  }
+
+  /* Custom Titlebar */
+  .titlebar {
+    -webkit-app-region: drag;
+    user-select: none;
+  }
+
+  .titlebar-controls {
+    -webkit-app-region: no-drag;
+  }
+
+  .titlebar-button {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0;
+  }
+
+  .titlebar-button:hover {
+    background: hsl(var(--accent) / 0.5);
+  }
+
+  .titlebar-button.close:hover {
+    background: hsl(var(--destructive) / 0.1);
+    color: hsl(var(--destructive));
+  }
+
+  /* Neumorphism titlebar styling */
+  .neumorphism-theme .titlebar {
+    background: linear-gradient(135deg, 
+      oklch(0.11 0 0) 0%,
+      oklch(0.13 0 0) 50%,
+      oklch(0.09 0 0) 100%
+    );
+    border-bottom: 1px solid oklch(0.15 0 0);
+    box-shadow: 
+      inset 0 1px 0 oklch(0.2 0 0 / 0.08),
+      0 1px 2px oklch(0 0 0 / 0.2);
+  }
+
+  .neumorphism-theme .titlebar-button {
+    background: transparent;
+    color: oklch(0.7 0 0);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .neumorphism-theme .titlebar-button:hover {
+    background: linear-gradient(145deg, oklch(0.15 0 0), oklch(0.11 0 0));
+    color: oklch(1.00 0 0);
+    box-shadow: 
+      inset 1px 1px 2px oklch(0.05 0 0 / 0.8),
+      inset -1px -1px 2px oklch(0.17 0 0 / 0.6);
+  }
+
+  .neumorphism-theme .titlebar-button.close:hover {
+    background: linear-gradient(145deg, oklch(0.35 0.12 0), oklch(0.25 0.12 0));
+    color: oklch(1.00 0 0);
+    box-shadow: 
+      inset 1px 1px 2px oklch(0.1 0.15 0 / 0.8),
+      inset -1px -1px 2px oklch(0.4 0.15 0 / 0.6);
   }
 
   /* Accessible scrollbar */

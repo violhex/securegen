@@ -115,19 +115,21 @@ export function History() {
   const getStrengthInfo = (strength?: number, type?: string) => {
     if (!strength) return null;
     
-    // Passwords use 20-100 scale (zxcvbn 0-4 converted), usernames use 0-100 scale
+    // All generators now use consistent 0-100 scale
     if (type === 'username') {
-      // Username strength uses exact backend ranges from evaluate_username_security()
+      // Username strength uses custom ranges optimized for username security concerns
       if (strength >= 0 && strength <= 25) return { label: 'Very Poor', color: 'strength-weak', icon: AlertCircle };
       if (strength >= 26 && strength <= 45) return { label: 'Poor', color: 'strength-weak', icon: AlertCircle };
       if (strength >= 46 && strength <= 65) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
       if (strength >= 66 && strength <= 80) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
       return { label: 'Excellent', color: 'strength-strong', icon: CheckCircle };
     } else {
-      // Password/passphrase strength (20-100 scale from zxcvbn conversion)
-      if (strength < 40) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
-      if (strength < 60) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
-      if (strength < 80) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
+      // Password/passphrase strength (consistent 0-100 scale from zxcvbn conversion)
+      // 0→0, 1→25, 2→50, 3→75, 4→100
+      if (strength < 25) return { label: 'Very Weak', color: 'strength-weak', icon: AlertCircle };
+      if (strength < 50) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
+      if (strength < 75) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
+      if (strength < 100) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
       return { label: 'Strong', color: 'strength-strong', icon: CheckCircle };
     }
   };

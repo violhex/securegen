@@ -21,15 +21,6 @@ import { TauriAPI } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import type { PassphraseConfig } from '@/types';
 
-// Strength scoring constants
-const MAX_STRENGTH = 100;
-const STRENGTH_THRESHOLDS = {
-  WEAK: MAX_STRENGTH * 0.25,    // 25 - corresponds to raw score 0-1
-  FAIR: MAX_STRENGTH * 0.5,     // 50 - corresponds to raw score 1-2
-  GOOD: MAX_STRENGTH * 0.75,    // 75 - corresponds to raw score 2-3
-  STRONG: MAX_STRENGTH          // 100 - corresponds to raw score 3-4
-} as const;
-
 export function PassphraseGenerator() {
   const [showPassphrase, setShowPassphrase] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -80,8 +71,8 @@ export function PassphraseGenerator() {
     if (currentPassphrase) {
       TauriAPI.calculatePasswordStrength(currentPassphrase)
         .then((result) => {
-          // Convert 0-4 scale to 0-100 percentage scale
-          setStrength(result.score * (MAX_STRENGTH / 4));
+          // Backend now returns 0-100 scale directly - no conversion needed
+          setStrength(result.score);
           setStrengthDetails({
             crack_times_display: result.crack_times_display,
             feedback: result.feedback,
@@ -97,6 +88,19 @@ export function PassphraseGenerator() {
       setStrengthDetails(null);
     }
   }, [currentPassphrase]);
+
+  // Listen for tray-triggered passphrase generation
+  useEffect(() => {
+    const handleTrayGeneration = () => {
+      handleGenerate();
+    };
+
+    window.addEventListener('tray-generate-passphrase', handleTrayGeneration);
+    
+    return () => {
+      window.removeEventListener('tray-generate-passphrase', handleTrayGeneration);
+    };
+  }, []);
 
   const handleCopy = async () => {
     if (currentPassphrase) {
@@ -155,10 +159,12 @@ export function PassphraseGenerator() {
   };
 
   const getStrengthLabel = (score: number) => {
-    // Score is now 0-100 (converted from 0-4 scale)
-    if (score < STRENGTH_THRESHOLDS.WEAK) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
-    if (score < STRENGTH_THRESHOLDS.FAIR) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
-    if (score < STRENGTH_THRESHOLDS.GOOD) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
+    // Score is now consistently 0-100 across all generators
+    // 0→0, 1→25, 2→50, 3→75, 4→100 (from zxcvbn)
+    if (score < 25) return { label: 'Very Weak', color: 'strength-weak', icon: AlertCircle };
+    if (score < 50) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
+    if (score < 75) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
+    if (score < 100) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
     return { label: 'Strong', color: 'strength-strong', icon: CheckCircle };
   };
 

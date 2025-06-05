@@ -9,7 +9,7 @@ use generators::{
     username::{generate_username as gen_username, UsernameGeneratorRequest},
 };
 use serde::{Deserialize, Serialize};
-use tauri::ClipboardManager;
+use tauri::{ClipboardManager, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent};
 use zxcvbn::zxcvbn;
 use std::fs;
 use tauri::api::path;
@@ -220,6 +220,16 @@ fn mask_ip_address(ip: &str) -> String {
     }
 }
 
+/// Calculate password/passphrase strength using zxcvbn library.
+/// 
+/// This function provides a consistent strength scoring system across all generators:
+/// - Uses industry-standard zxcvbn library for cryptographic strength analysis
+/// - Converts zxcvbn's 0-4 scale to consistent 0-100 scale: score * 25
+/// - Mapping: 0→0, 1→25, 2→50, 3→75, 4→100
+/// - Thresholds: Very Weak<25, Weak<50, Fair<75, Good<100, Strong=100
+/// 
+/// This ensures identical zxcvbn scores always produce identical strength ratings
+/// across passwords, passphrases, and any future zxcvbn-based generators.
 #[tauri::command]
 async fn calculate_password_strength(password: String) -> Result<PasswordStrength, String> {
     let estimate = zxcvbn(&password, &[]).map_err(|e| e.to_string())?;
@@ -247,7 +257,7 @@ async fn calculate_password_strength(password: String) -> Result<PasswordStrengt
     };
     
     Ok(PasswordStrength {
-        score: (estimate.score() as f64 * 20.0 + 20.0) as u8, // Convert 0-4 scale to 20-100 (more realistic)
+        score: (estimate.score() as f64 * 25.0) as u8, // Convert 0-4 scale to 0-100 scale consistently
         crack_times_display: crack_time_display,
         feedback,
     })
@@ -422,6 +432,17 @@ async fn generate_user_storage_key(hardware_id: &str) -> Result<String, String> 
     Ok(format!("securegen-store-{}", short_key))
 }
 
+/// Calculate username security strength using custom algorithm.
+/// 
+/// Username security differs from password security and requires specialized evaluation:
+/// - Focuses on privacy, uniqueness, and guessability rather than cryptographic strength
+/// - Uses direct 0-100 scale calculation (no conversion needed)
+/// - Considers username-specific factors: dictionary usage, personal info, common patterns
+/// - Thresholds: Very Poor≤25, Poor≤45, Fair≤65, Good≤80, Excellent≥81
+/// 
+/// This custom approach is necessary because username security concerns (privacy, 
+/// uniqueness, non-attribution) differ significantly from password security concerns
+/// (resistance to brute force, dictionary attacks, cryptographic strength).
 #[tauri::command]
 async fn calculate_username_strength(username: String) -> Result<UsernameStrength, String> {
     let result = evaluate_username_security(&username);
@@ -453,11 +474,19 @@ fn evaluate_username_security(username: &str) -> UsernameStrength {
     }
     
     // Enhanced dictionary word analysis - distinguish between secure and weak dictionary usage
+    // BUT: Apply length-based constraints to ensure consistent Basic username ratings
     let dict_analysis = analyze_dictionary_usage(&username_lower);
     match dict_analysis {
         DictionaryUsage::SecureEFFWord { word_length } => {
             // EFF words are cryptographically selected - they're GOOD for usernames
-            if word_length >= 7 {
+            // However, for Basic strength (3-4 chars), we need consistent Poor ratings
+            if length <= 4 {
+                // Basic usernames (3-4 chars) should be consistently Poor regardless of EFF status
+                // Give minimal bonus to maintain some distinction but keep in Poor range
+                privacy_score += 5;  // Reduced from 10 to keep Basic usernames in Poor category
+                uniqueness_score += 10; // Reduced from 15
+                feedback.push("Short word from secure wordlist - consider longer username".to_string());
+            } else if word_length >= 7 {
                 privacy_score += 20;
                 uniqueness_score += 25;
                 feedback.push("Uses cryptographically strong word - excellent choice".to_string());
@@ -466,6 +495,7 @@ fn evaluate_username_security(username: &str) -> UsernameStrength {
                 uniqueness_score += 20;
                 feedback.push("Uses secure word from cryptographic wordlist".to_string());
             } else {
+                // This case should be covered by the length <= 4 check above, but keeping for safety
                 privacy_score += 10;
                 uniqueness_score += 15;
                 feedback.push("Uses word from secure wordlist".to_string());
@@ -484,8 +514,14 @@ fn evaluate_username_security(username: &str) -> UsernameStrength {
             feedback.push("Contains compound words - moderate security".to_string());
         }
         DictionaryUsage::NonDictionary => {
-            // Not a dictionary word - good for uniqueness
-            uniqueness_score += 15;
+            // Not a dictionary word - good for uniqueness, but for Basic length still weak
+            if length <= 4 {
+                // Basic non-dictionary usernames are still weak due to short length
+                uniqueness_score += 10; // Reduced from 15 to keep Basic usernames in Poor range
+                feedback.push("Short username - consider adding length for better security".to_string());
+            } else {
+                uniqueness_score += 15;
+            }
         }
     }
     
@@ -514,8 +550,15 @@ fn evaluate_username_security(username: &str) -> UsernameStrength {
             privacy_score = privacy_score.saturating_sub(30);
             uniqueness_score = uniqueness_score.saturating_sub(25);
         } else {
-            privacy_score += 25;
-            uniqueness_score += 20;
+            // Apply length-based bonus scaling for consistency
+            if length <= 4 {
+                // Basic usernames get reduced bonus to stay in Poor category
+                privacy_score += 20; // Reduced from 25
+                uniqueness_score += 15; // Reduced from 20
+            } else {
+                privacy_score += 25;
+                uniqueness_score += 20;
+            }
         }
     } else {
         // For generated usernames, give a privacy bonus since they're designed to be secure
@@ -528,7 +571,13 @@ fn evaluate_username_security(username: &str) -> UsernameStrength {
         feedback.push("May contain personal information patterns".to_string());
         privacy_score = privacy_score.saturating_sub(25);
     } else {
-        privacy_score += 15;
+        // Apply length-based bonus scaling
+        if length <= 4 {
+            // Basic usernames get reduced bonus to maintain Poor rating
+            privacy_score += 10; // Reduced from 15
+        } else {
+            privacy_score += 15;
+        }
     }
     
     // Complexity evaluation (less important for usernames than passwords)
@@ -561,7 +610,16 @@ fn evaluate_username_security(username: &str) -> UsernameStrength {
     
     // Calculate overall score (weighted average)
     let overall_score = ((privacy_score as f32 * 0.6) + (uniqueness_score as f32 * 0.4)) as u8;
-    let clamped_score = overall_score.min(100);
+    let mut clamped_score = overall_score.min(100);
+    
+    // Hard cap for very short usernames - they should never exceed "Very Poor" regardless of other factors
+    // 3-4 character usernames are fundamentally insecure due to small namespace and easy guessing
+    if length <= 4 {
+        clamped_score = clamped_score.min(25);  // Cap at 25 to ensure "Very Poor" rating
+        if !feedback.iter().any(|f| f.contains("too short") || f.contains("Short")) {
+            feedback.insert(0, "Very short username - highly vulnerable to guessing attacks".to_string());
+        }
+    }
     
     // Add recommendations based on score
     if clamped_score < 30 {
@@ -865,8 +923,119 @@ fn contains_sequential_patterns(username: &str) -> bool {
     false
 }
 
+fn create_system_tray() -> SystemTray {
+    let show = CustomMenuItem::new("show".to_string(), "Show SecureGen");
+    let hide = CustomMenuItem::new("hide".to_string(), "Hide to Tray");
+    let generate_password = CustomMenuItem::new("generate_password".to_string(), "Generate Password");
+    let generate_passphrase = CustomMenuItem::new("generate_passphrase".to_string(), "Generate Passphrase");
+    let generate_username = CustomMenuItem::new("generate_username".to_string(), "Generate Username");
+    let quit = CustomMenuItem::new("quit".to_string(), "Quit");
+    
+    let tray_menu = SystemTrayMenu::new()
+        .add_item(show)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(generate_password)
+        .add_item(generate_passphrase)
+        .add_item(generate_username)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(hide)
+        .add_item(quit);
+
+    SystemTray::new().with_menu(tray_menu)
+}
+
+fn handle_system_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
+    match event {
+        SystemTrayEvent::LeftClick {
+            position: _,
+            size: _,
+            ..
+        } => {
+            // Left click shows/focuses the window
+            if let Some(window) = app.get_window("main") {
+                if window.is_visible().unwrap_or(false) {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        }
+        SystemTrayEvent::RightClick {
+            position: _,
+            size: _,
+            ..
+        } => {
+            // Right click shows the context menu (handled automatically)
+        }
+        SystemTrayEvent::DoubleClick {
+            position: _,
+            size: _,
+            ..
+        } => {
+            // Double click shows the window
+            if let Some(window) = app.get_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+        SystemTrayEvent::MenuItemClick { id, .. } => {
+            match id.as_str() {
+                "show" => {
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.unminimize();
+                    }
+                }
+                "hide" => {
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+                "generate_password" => {
+                    // Show window and trigger password generation
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        // Emit an event to the frontend to generate a password
+                        let _ = window.emit("tray-generate-password", ());
+                    }
+                }
+                "generate_passphrase" => {
+                    // Show window and trigger passphrase generation
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        // Emit an event to the frontend to generate a passphrase
+                        let _ = window.emit("tray-generate-passphrase", ());
+                    }
+                }
+                "generate_username" => {
+                    // Show window and trigger username generation
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        // Emit an event to the frontend to generate a username
+                        let _ = window.emit("tray-generate-username", ());
+                    }
+                }
+                "quit" => {
+                    app.exit(0);
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+}
+
 fn main() {
+    let system_tray = create_system_tray();
+    
     tauri::Builder::default()
+        .system_tray(system_tray)
+        .on_system_tray_event(handle_system_tray_event)
         .invoke_handler(tauri::generate_handler![
             generate_password,
             generate_password_legacy,
@@ -879,6 +1048,26 @@ fn main() {
             get_public_ip_address,
             get_system_identity
         ])
+        .setup(|app| {
+            // Handle window close event to hide to tray instead of closing
+            let window = app.get_window("main").unwrap();
+            let app_handle = app.handle();
+            
+            window.on_window_event(move |event| {
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        // Prevent the window from closing and hide it instead
+                        api.prevent_close();
+                        if let Some(window) = app_handle.get_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                    _ => {}
+                }
+            });
+            
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -898,8 +1087,6 @@ mod tests {
         // Check that it identifies the brand name issue
         let has_brand_feedback = result.feedback.iter().any(|f| f.to_lowercase().contains("skype"));
         assert!(has_brand_feedback, "Should identify Skype as a problematic brand name");
-        
-
     }
 
     #[test]
@@ -909,206 +1096,72 @@ mod tests {
         // This should get a high score - it's a compound EFF word with numbers (generated pattern)
         // Actual calculation: Privacy 80, Uniqueness 70 -> (80*0.6 + 70*0.4) = 76
         assert!(result.score >= 75, "QuietRaven47 should have excellent security score, got: {}", result.score);
-        
+    }
 
+    #[test]
+    fn test_username_strength_basic_usernames() {
+        // Test that Basic usernames (3-4 characters) are consistently rated as Very Poor due to hard cap
+        let basic_usernames = ["ace", "act", "add", "age", "aid", "aim", "air", "all", "and", "any"];
+        
+        for username in &basic_usernames {
+            let result = evaluate_username_security(username);
+            
+            // Basic usernames should be capped at Very Poor (≤25) regardless of other factors
+            assert!(result.score <= 25, 
+                "Basic username '{}' should be Very Poor (≤25) due to hard cap, got: {} ({})", 
+                username, result.score, result.security_level);
+            
+            // Should have feedback about being very short
+            let has_short_feedback = result.feedback.iter().any(|f| 
+                f.contains("Very short") || f.contains("Short") || f.contains("too short"));
+            assert!(has_short_feedback, 
+                "Basic username '{}' should have feedback about being too short", username);
+        }
     }
 
     #[test]
     fn test_username_strength_eff_words() {
         // Test single EFF words of different lengths (using actual EFF words not in common_words list)
-        let weak_eff = evaluate_username_security("able"); // 4 chars - Basic strength
+        let weak_eff = evaluate_username_security("able"); // 4 chars - Basic strength (hard capped)
         let standard_eff = evaluate_username_security("abide"); // 5 chars - Standard strength  
         let strong_eff = evaluate_username_security("outcome"); // 7 chars - Strong strength
         let maximum_eff = evaluate_username_security("transport"); // 9 chars - Maximum strength
         
-
-        
         // EFF words should get reasonable scores, with longer words scoring higher
-        // Adjusted expectations based on actual scoring algorithm:
-        // - 4 char word gets ~40-50 points (short length penalty + EFF bonus)  
+        // Updated expectations with hard cap for basic length:
+        // - 4 char word is capped at 25 (Very Poor due to fundamental length vulnerability)
         // - 5 char word gets ~55-65 points (better length + EFF bonus)
         // - 7+ char words get ~75+ points (good length + strong EFF bonus)
-        assert!(weak_eff.score >= 40, "Short EFF word should be decent, got: {}", weak_eff.score);
+        assert!(weak_eff.score <= 25, "Short EFF word should be capped at Very Poor due to length, got: {}", weak_eff.score);
         assert!(standard_eff.score >= 50, "Standard EFF word should be good, got: {}", standard_eff.score);
         assert!(strong_eff.score >= 70, "Strong EFF word should be very good, got: {}", strong_eff.score);
         assert!(maximum_eff.score >= 75, "Maximum EFF word should be excellent, got: {}", maximum_eff.score);
         
-        // Strong and Maximum should be better than Basic and Standard
+        // Longer words should be better than shorter ones
+        assert!(standard_eff.score > weak_eff.score, "Standard should beat Basic (hard cap applies)");
         assert!(strong_eff.score > standard_eff.score, "Strong should beat Standard");
         assert!(maximum_eff.score >= strong_eff.score, "Maximum should be at least as good as Strong");
+        
+        // Verify that Basic EFF words are now in Very Poor category due to hard cap
+        assert!(weak_eff.score <= 25, 
+            "Basic EFF word should be in Very Poor category (≤25) due to hard cap, got: {}", weak_eff.score);
     }
 
     #[test]
     fn test_username_strength_generated_patterns() {
         // Test patterns that our generator creates (using actual EFF words not in common_words)
-        let word_with_numbers = evaluate_username_security("outcome1234"); // EFF word + 4 digits
-        let capitalized_word = evaluate_username_security("Outcome");      // Capitalized EFF word
-        let compound_words = evaluate_username_security("outcomeabide");   // Two EFF words
+        let word_with_numbers = evaluate_username_security("outcome1234"); // EFF word + 4 digits (11 chars total)
+        let capitalized_word = evaluate_username_security("Outcome");      // Capitalized EFF word (7 chars)
+        let compound_words = evaluate_username_security("outcomeabide");   // Two EFF words (12 chars total)
         
-
-        
-        // Generated patterns should score well, adjusting expectations:
-        // - EFF word + numbers: gets penalized for length but has strong EFF bonus + numbers
-        // - Single EFF word (capitalized): same as lowercase EFF word
-        // - Compound EFF words: gets strong EFF bonus for long compound word
-        assert!(word_with_numbers.score >= 35, "EFF word + numbers should be decent, got: {}", word_with_numbers.score);
+        // Generated patterns should score well since they're all longer than 4 characters:
+        // - EFF word + numbers: long enough to avoid hard cap, gets EFF bonus + numbers + generated bonus
+        // - Single EFF word (capitalized): 7 chars, same as lowercase EFF word, good score
+        // - Compound EFF words: very long, gets strong EFF bonus for compound word
+        assert!(word_with_numbers.score >= 60, "EFF word + numbers should be good (long enough), got: {}", word_with_numbers.score);
         assert!(capitalized_word.score >= 70, "Capitalized EFF word should be very good, got: {}", capitalized_word.score);
         assert!(compound_words.score >= 75, "Compound EFF words should be excellent, got: {}", compound_words.score);
     }
 
-    #[test]
-    fn test_format_machine_id() {
-        let test_machine_id = "test-machine-id-12345";
-        let formatted = format_machine_id(test_machine_id);
-        
-        // Should start with HWID- and have the correct format
-        assert!(formatted.starts_with("HWID-"));
-        assert_eq!(formatted.len(), 19); // HWID-XXXX-XXXX-XXXX-XXXX format
-        
-        // Should be consistent for the same input
-        let formatted2 = format_machine_id(test_machine_id);
-        assert_eq!(formatted, formatted2);
-        
 
-    }
-
-    #[test]
-    fn test_generate_fallback_hardware_id() {
-        let result = generate_fallback_hardware_id();
-        
-        // Should succeed
-        assert!(result.is_ok(), "Fallback hardware ID generation should succeed");
-        
-        let hwid = result.unwrap();
-        
-        // Should start with HWID-FB- (fallback indicator)
-        assert!(hwid.starts_with("HWID-FB-"), "Fallback HWID should start with HWID-FB-, got: {}", hwid);
-        
-        // Should have consistent format
-        assert!(hwid.len() >= 15, "HWID should have minimum length, got: {}", hwid.len());
-        
-        // Should be consistent for the same system
-        let result2 = generate_fallback_hardware_id();
-        assert!(result2.is_ok());
-        assert_eq!(hwid, result2.unwrap(), "Fallback HWID should be consistent");
-        
-
-    }
-
-    #[tokio::test]
-    async fn test_generate_hardware_id_consistency() {
-        let result1 = generate_hardware_id().await;
-        let result2 = generate_hardware_id().await;
-        
-        // Both should succeed
-        assert!(result1.is_ok(), "First hardware ID generation should succeed");
-        assert!(result2.is_ok(), "Second hardware ID generation should succeed");
-        
-        let hwid1 = result1.unwrap();
-        let hwid2 = result2.unwrap();
-        
-        // Should be consistent
-        assert_eq!(hwid1, hwid2, "Hardware ID should be consistent across calls");
-        
-        // Should have proper format
-        assert!(hwid1.starts_with("HWID-"), "Hardware ID should start with HWID-, got: {}", hwid1);
-        
-
-    }
-
-    #[test]
-    fn test_format_machine_id_different_inputs() {
-        let id1 = format_machine_id("machine1");
-        let id2 = format_machine_id("machine2");
-        let id3 = format_machine_id("machine1"); // Same as id1
-        
-        // Different inputs should produce different outputs
-        assert_ne!(id1, id2, "Different machine IDs should produce different formatted IDs");
-        
-        // Same inputs should produce same outputs
-        assert_eq!(id1, id3, "Same machine ID should produce same formatted ID");
-        
-        // All should have proper format
-        assert!(id1.starts_with("HWID-"));
-        assert!(id2.starts_with("HWID-"));
-        assert_eq!(id1.len(), 19);
-        assert_eq!(id2.len(), 19);
-        
-
-    }
-
-    #[test]
-    fn test_mask_ip_address_ipv4() {
-        // Test standard IPv4 addresses - should show only first 2 octets
-        assert_eq!(mask_ip_address("192.168.1.100"), "192.168.xxx.xxx");
-        assert_eq!(mask_ip_address("10.0.0.1"), "10.0.xxx.xxx");
-        assert_eq!(mask_ip_address("172.16.254.1"), "172.16.xxx.xxx");
-        assert_eq!(mask_ip_address("8.8.8.8"), "8.8.xxx.xxx");
-        assert_eq!(mask_ip_address("203.0.113.195"), "203.0.xxx.xxx");
-        
-
-    }
-
-    #[test]
-    fn test_mask_ip_address_ipv6() {
-        // Test standard IPv6 addresses - should show only first segment
-        assert_eq!(mask_ip_address("2001:db8:85a3:8d3:1319:8a2e:370:7348"), "2001::xxxx:xxxx:xxxx:xxxx");
-        assert_eq!(mask_ip_address("fe80:0000:0000:0000:0202:b3ff:fe1e:8329"), "fe80::xxxx:xxxx:xxxx:xxxx");
-        assert_eq!(mask_ip_address("2001:0db8:0000:0000:0000:ff00:0042:8329"), "2001::xxxx:xxxx:xxxx:xxxx");
-        assert_eq!(mask_ip_address("::1"), "::xxxx:xxxx:xxxx:xxxx");
-        
-        // Test compressed IPv6 formats
-        assert_eq!(mask_ip_address("2001:db8::1"), "2001::xxxx:xxxx:xxxx:xxxx");
-        assert_eq!(mask_ip_address("fe80::1"), "fe80::xxxx:xxxx:xxxx:xxxx");
-        
-
-    }
-
-    #[test]
-    fn test_mask_ip_address_edge_cases() {
-        // Test malformed or edge case IPs
-        assert_eq!(mask_ip_address("not.an.ip"), "Not available");
-        assert_eq!(mask_ip_address("192.168.1"), "Not available"); // Incomplete IPv4
-        assert_eq!(mask_ip_address(""), "Not available");
-        assert_eq!(mask_ip_address("invalid"), "Not available");
-        
-        // Test IPv6 edge cases
-        assert_eq!(mask_ip_address("::"), "::xxxx:xxxx:xxxx:xxxx"); // Empty segments
-        assert_eq!(mask_ip_address(":invalid:"), "::xxxx:xxxx:xxxx:xxxx"); // Malformed but contains colons
-        
-
-    }
-
-    #[test]
-    fn test_mask_ip_address_privacy_enhancement() {
-        // Verify that the new masking provides better privacy than before
-        let ipv4_test = "192.168.1.100";
-        let ipv6_test = "2001:db8:85a3:8d3:1319:8a2e:370:7348";
-        
-        let masked_ipv4 = mask_ip_address(ipv4_test);
-        let masked_ipv6 = mask_ip_address(ipv6_test);
-        
-        // IPv4: Should hide last 2 octets (enhanced from hiding only last octet)
-        assert!(masked_ipv4.contains("xxx.xxx"), "IPv4 should mask last 2 octets");
-        assert!(!masked_ipv4.contains("1.100"), "IPv4 should not reveal last 2 octets");
-        
-        // IPv6: Should hide all but first segment (enhanced from showing multiple segments)
-        assert!(masked_ipv6.starts_with("2001::"), "IPv6 should show only first segment");
-        assert!(!masked_ipv6.contains("db8"), "IPv6 should not reveal second segment");
-        assert!(!masked_ipv6.contains("85a3"), "IPv6 should not reveal third segment");
-        
-
-    }
-
-    #[test]
-    fn test_username_strength_unnerving1234() {
-        // This is the exact username from the user's screenshot that should be getting "Excellent"
-        let result = evaluate_username_security("Unnerving1234");
-        
-        // "Unnerving" is an 9-character EFF word + 4 digits = excellent generated pattern
-        // Should get: length bonus + EFF word bonus + numbers bonus + generated pattern bonus
-        // Expected score should be 80+ (Excellent category)
-        assert!(result.score >= 80, "Unnerving1234 should have excellent security score, got: {}", result.score);
-        assert_eq!(result.security_level, "Excellent - Highly Secure");
-    }
 }

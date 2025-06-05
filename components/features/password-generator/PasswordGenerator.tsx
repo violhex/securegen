@@ -87,6 +87,19 @@ export function PasswordGenerator() {
     }
   }, [currentPassword]);
 
+  // Listen for tray-triggered password generation
+  useEffect(() => {
+    const handleTrayGeneration = () => {
+      handleGenerate();
+    };
+
+    window.addEventListener('tray-generate-password', handleTrayGeneration);
+    
+    return () => {
+      window.removeEventListener('tray-generate-password', handleTrayGeneration);
+    };
+  }, []);
+
   const handleCopy = async () => {
     if (currentPassword) {
       try {
@@ -144,11 +157,12 @@ export function PasswordGenerator() {
   };
 
   const getStrengthLabel = (score: number) => {
-    // Backend converts zxcvbn 0-4 scale to 20-100 scale for passwords
-    // 0→20, 1→40, 2→60, 3→80, 4→100
-    if (score < 40) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
-    if (score < 60) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
-    if (score < 80) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
+    // Backend now converts zxcvbn 0-4 scale to 0-100 scale consistently
+    // 0→0, 1→25, 2→50, 3→75, 4→100
+    if (score < 25) return { label: 'Very Weak', color: 'strength-weak', icon: AlertCircle };
+    if (score < 50) return { label: 'Weak', color: 'strength-weak', icon: AlertCircle };
+    if (score < 75) return { label: 'Fair', color: 'strength-fair', icon: AlertCircle };
+    if (score < 100) return { label: 'Good', color: 'strength-good', icon: CheckCircle };
     return { label: 'Strong', color: 'strength-strong', icon: CheckCircle };
   };
 
